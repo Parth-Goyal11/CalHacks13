@@ -6,7 +6,8 @@ TypeScript monorepo for a real-time multiplayer game: players photograph real sp
 
 ## Monorepo layout
 
-- `/web` — Next.js + Tailwind frontend (player UI, camera capture, leaderboards)
+- `/web` — Next.js + Tailwind frontend (player UI, camera capture, leaderboards); proxies photo uploads via `/api/sky-photo`
+- `/sky_photo` — FastAPI service (OpenCV metrics + Astrometry.net plate-solve + annotated overlay); not the Elastic event ingest
 - `/ingest` — Node scripts that pull space-event data and index it into Elasticsearch (`@elastic/elasticsearch`)
 - `/spacetime` — SpacetimeDB module (authoritative real-time game backend)
 - `/lib` — shared packages (xAI Grok client via `ai` + `@ai-sdk/xai`)

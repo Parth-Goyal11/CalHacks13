@@ -1,0 +1,501 @@
+{
+  "$defs": {
+    "Area": {
+      "properties": {
+        "lat": {
+          "title": "Lat",
+          "type": "number"
+        },
+        "lon": {
+          "title": "Lon",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lat",
+        "lon"
+      ],
+      "title": "Area",
+      "type": "object"
+    },
+    "Award": {
+      "properties": {
+        "badge": {
+          "title": "Badge",
+          "type": "string"
+        },
+        "points": {
+          "title": "Points",
+          "type": "integer"
+        },
+        "card_foil": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Card Foil"
+        }
+      },
+      "required": [
+        "badge",
+        "points"
+      ],
+      "title": "Award",
+      "type": "object"
+    },
+    "Critique": {
+      "properties": {
+        "strengths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Strengths",
+          "type": "array"
+        },
+        "improvements": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Improvements",
+          "type": "array"
+        }
+      },
+      "required": [
+        "strengths",
+        "improvements"
+      ],
+      "title": "Critique",
+      "type": "object"
+    },
+    "Evidence": {
+      "properties": {
+        "exif_time": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exif Time"
+        },
+        "area": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Area"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "matches_logged_pass": {
+          "default": false,
+          "title": "Matches Logged Pass",
+          "type": "boolean"
+        }
+      },
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Identity": {
+      "properties": {
+        "method": {
+          "enum": [
+            "plate-solved",
+            "model-estimate"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "center_ra_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Center Ra Deg"
+        },
+        "center_dec_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Center Dec Deg"
+        },
+        "field_width_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Field Width Deg"
+        },
+        "rotation_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rotation Deg"
+        },
+        "constellations": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Constellations",
+          "type": "array"
+        },
+        "named_stars": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Named Stars",
+          "type": "array"
+        },
+        "brightest_object": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brightest Object"
+        },
+        "other": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Other",
+          "type": "array"
+        }
+      },
+      "required": [
+        "method",
+        "confidence"
+      ],
+      "title": "Identity",
+      "type": "object"
+    },
+    "Metrics": {
+      "properties": {
+        "sharpness": {
+          "title": "Sharpness",
+          "type": "number"
+        },
+        "trailing": {
+          "title": "Trailing",
+          "type": "number"
+        },
+        "clipped_pct": {
+          "title": "Clipped Pct",
+          "type": "number"
+        },
+        "crushed_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Crushed Pct"
+        },
+        "noise_sigma": {
+          "title": "Noise Sigma",
+          "type": "number"
+        },
+        "star_count": {
+          "title": "Star Count",
+          "type": "integer"
+        },
+        "horizon_tilt_deg": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Horizon Tilt Deg"
+        },
+        "mean_brightness": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Brightness"
+        }
+      },
+      "required": [
+        "sharpness",
+        "trailing",
+        "clipped_pct",
+        "noise_sigma",
+        "star_count"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "Rubric": {
+      "properties": {
+        "clarity": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Clarity",
+          "type": "integer"
+        },
+        "tracking": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Tracking",
+          "type": "integer"
+        },
+        "exposure": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Exposure",
+          "type": "integer"
+        },
+        "noise": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Noise",
+          "type": "integer"
+        },
+        "framing": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Framing",
+          "type": "integer"
+        },
+        "conditions": {
+          "maximum": 10,
+          "minimum": 0,
+          "title": "Conditions",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "clarity",
+        "tracking",
+        "exposure",
+        "noise",
+        "framing",
+        "conditions"
+      ],
+      "title": "Rubric",
+      "type": "object"
+    }
+  },
+  "description": "Full Sky Photo result record written to data/photos/<photo_id>.json.",
+  "properties": {
+    "photo_id": {
+      "title": "Photo Id",
+      "type": "string"
+    },
+    "is_night_sky": {
+      "title": "Is Night Sky",
+      "type": "boolean"
+    },
+    "identity": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Identity"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Metrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "rubric": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Rubric"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "critique": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Critique"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Score"
+    },
+    "subject_bonus": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Subject Bonus"
+    },
+    "final_score": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Final Score"
+    },
+    "rarity": {
+      "anyOf": [
+        {
+          "enum": [
+            "Common",
+            "Uncommon",
+            "Rare",
+            "Epic",
+            "Legendary"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rarity"
+    },
+    "award": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Award"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "evidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Evidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "needs_review": {
+      "default": false,
+      "title": "Needs Review",
+      "type": "boolean"
+    },
+    "annotated_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Annotated Path"
+    },
+    "annotated_image_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Annotated Image Url"
+    }
+  },
+  "required": [
+    "photo_id",
+    "is_night_sky"
+  ],
+  "title": "SkyPhotoRecord",
+  "type": "object"
+}

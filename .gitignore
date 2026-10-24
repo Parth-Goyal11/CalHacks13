@@ -32,3 +32,15 @@ yarn-error.log*
 coverage/
 .turbo/
 *.log
+
+# Python / Sky Photo
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+data/photos/*.json
+data/photos/*_annotated.jpg
+!data/photos/.gitkeep
