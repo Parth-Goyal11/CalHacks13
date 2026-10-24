@@ -14,7 +14,9 @@ import {
   toDatetimeLocalValue,
 } from "@/lib/image";
 import { FigurePanel } from "./FigurePanel";
+import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SkyOverlay } from "./SkyOverlay";
+import { StarStructure } from "./StarStructure";
 
 type Step = "capture" | "meta" | "result";
 
@@ -159,7 +161,7 @@ export function SkyExplorer() {
       250
     );
     const controller = new AbortController();
-    const abortTimer = setTimeout(() => controller.abort(), 60_000);
+    const abortTimer = setTimeout(() => controller.abort(), 75_000);
     try {
       const res = await fetch("/api/analyze-sky", {
         method: "POST",
@@ -179,7 +181,7 @@ export function SkyExplorer() {
       setStep("result");
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setError("Request timed out (~60s). Retry, or check the terminal for API errors.");
+        setError("Request timed out (~75s). Retry, or check the terminal for API errors.");
       } else {
         setError(e instanceof Error ? e.message : "Analysis failed");
       }
@@ -284,10 +286,10 @@ export function SkyExplorer() {
           </div>
           <div className="text-sm leading-relaxed text-zinc-500">
             <p>
-              Tip: shoot away from streetlights, include a recognizable
-              constellation if you can, and note the direction you were facing.
-              Location and time let Grok cross-check what should actually be
-              above the horizon.
+              Tip: shoot away from streetlights and note the direction you were
+              facing. Accurate lat/lon and time drive which constellations we
+              expect overhead — Grok uses that prior to name more of the stars
+              in your frame.
             </p>
           </div>
         </section>
@@ -445,35 +447,7 @@ export function SkyExplorer() {
             </button>
           </div>
 
-          {score?.finalScore != null && score.rarity && score.award ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3 text-sm">
-              <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
-                Score
-              </span>
-              <span className="text-lg font-semibold text-zinc-50">
-                {score.finalScore}
-              </span>
-              <span className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
-                {score.rarity}
-              </span>
-              <span className="text-sky-300">
-                +{score.award.points} pts · {score.award.badge}
-              </span>
-              {score.subjectBonus ? (
-                <span className="text-xs text-zinc-500">
-                  quality {score.score} + subject {score.subjectBonus}
-                </span>
-              ) : (
-                <span className="text-xs text-zinc-500">
-                  quality {score.score} (model estimate · capped at Rare)
-                </span>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-500">
-              No award points — nothing was confidently identified in-frame.
-            </div>
-          )}
+          {score ? <ScoreBreakdown score={score} /> : null}
 
           <div className="overflow-hidden rounded-lg border border-zinc-800">
             <SkyOverlay
@@ -485,12 +459,19 @@ export function SkyExplorer() {
             />
           </div>
 
+          <StarStructure
+            analysis={analysis}
+            selected={selected}
+            onSelect={setSelected}
+          />
+
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             <div className="flex flex-col gap-3">
               {!selected ? (
                 <p className="text-sm text-zinc-500">
                   Watch the sky brighten — then faint lines appear. Tap a lit
-                  star or a chip below for details.
+                  star or a chip below for details; selected figures show named
+                  star labels on the photo.
                 </p>
               ) : null}
               <ul className="flex flex-wrap gap-2">
@@ -506,6 +487,11 @@ export function SkyExplorer() {
                       }`}
                     >
                       {f.name}
+                      {f.stars.length > 0 ? (
+                        <span className="ml-1 text-zinc-600">
+                          {f.stars.length}
+                        </span>
+                      ) : null}
                     </button>
                   </li>
                 ))}

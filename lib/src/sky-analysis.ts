@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import { createGrokClient } from "./grok";
+import { buildSkyLocationContext } from "./sky-context";
 import { scoreSkyAnalysis, type ScoreResult } from "./sky-score";
 
 /** Normalized image coords: (0,0) top-left → (1,1) bottom-right. */
@@ -68,31 +69,24 @@ export const VISION_MODEL: string =
   (typeof process !== "undefined" && process.env.SKY_VISION_MODEL) ||
   "grok-4.20-0309-non-reasoning";
 
-const ANALYSIS_TIMEOUT_MS = 55_000;
-const MIN_CONFIDENCE = 0.55;
+const ANALYSIS_TIMEOUT_MS = 70_000;
+const MIN_CONFIDENCE = 0.4;
 
 function buildPrompt(meta: SkyCaptureMeta): string {
-  const facing =
-    meta.facingDegrees !== undefined && !Number.isNaN(meta.facingDegrees)
-      ? `Facing ~${meta.facingDegrees}° (0=N, 90=E).`
-      : "Facing unknown.";
+  const sky = buildSkyLocationContext(meta);
 
-  return `Night-sky photo ID. Be fast and honest.
+  return `Night-sky photo identification for OrbitQuest. Use the LOCATION SKY PRIOR to name what is visible.
 
-Observer (SECONDARY — disambiguate only, NEVER invent objects not in the frame):
-lat ${meta.latitude}, lon ${meta.longitude}${
-    meta.locationLabel ? `, ${meta.locationLabel}` : ""
-  }; taken ${meta.takenAt}; ${facing}${
-    meta.notes ? `; notes: ${meta.notes}` : ""
-  }
+${sky.promptBlock}
 
-PHOTO-FIRST RULES:
-1. Only mark stars/planets you can SEE as bright points in this image. Put x,y on those pixels (0=left/top, 1=right/bottom).
-2. If location/time says a constellation is up but it is NOT recognizable in the photo, OMIT it.
-3. lines[] only between stars you listed for that figure — classic segments only. No decorative/random lines. Prefer [] if unsure.
-4. Constellation/asterism: need ≥3 visible stars forming the pattern. Else omit or label a single point as star/planet.
-5. confidence < 0.55 → omit. 1–4 figures max. Short text.
-6. overview must admit uncertainty; never claim "in the photo" from almanac alone.
+RULES:
+1. Mark every bright star/planet you can SEE as a pixel in this image. Put x,y on those pixels (0=left/top, 1=right/bottom).
+2. LOCATION IS PRIMARY FOR NAMING: when a pattern matches a listed prior figure, name it and include ALL stick-figure stars that are visible — not just 3. Use classic star names from the prior when they match.
+3. Still photo-grounded: do NOT invent stars that are not bright points in the image. If a prior figure is not recognizable, omit it.
+4. Prefer 3–8 figures when the sky is rich. Include lone bright stars/planets as kind "star"/"planet" with a one-star stars[] entry.
+5. Constellation/asterism: ≥3 visible stars + classic lines[] between listed star ids. Name each star (Betelgeuse, Rigel, …).
+6. lines[] only between stars you listed — classic segments only.
+7. confidence < 0.4 → omit. Short text. overview must mention how location/time guided the IDs.
 
 Return ONLY JSON (no fences):
 {
@@ -110,7 +104,7 @@ Return ONLY JSON (no fences):
       "mythology": string,
       "labelX": 0-1,
       "labelY": 0-1,
-      "stars": [{"id": string, "name"?: string, "x": 0-1, "y": 0-1, "brightness"?: 0-1}],
+      "stars": [{"id": string, "name": string, "x": 0-1, "y": 0-1, "brightness"?: 0-1}],
       "lines": [{"from": string, "to": string}]
     }
   ]
@@ -168,27 +162,33 @@ function sanitize(analysis: SkyAnalysis): SkyAnalysis {
           s.y >= 0 &&
           s.y <= 1
       )
-      .map((s) => ({
+      .map((s, i) => ({
         ...s,
+        id: s.id || `${fig.id}-s${i}`,
+        name: s.name?.trim() || s.id || `Star ${i + 1}`,
         x: Math.min(1, Math.max(0, s.x)),
         y: Math.min(1, Math.max(0, s.y)),
       }));
 
     if (stars.length === 0) continue;
 
+    let kind = fig.kind;
+    let name = fig.name;
+    // Keep partial patterns as named stars instead of dropping them.
     if (
-      (fig.kind === "constellation" || fig.kind === "asterism") &&
+      (kind === "constellation" || kind === "asterism") &&
       stars.length < 3
     ) {
-      continue;
+      kind = "star";
+      name = stars[0]?.name ?? fig.name;
     }
 
     const ids = new Set(stars.map((s) => s.id));
     const lines =
-      fig.kind === "constellation" || fig.kind === "asterism"
+      kind === "constellation" || kind === "asterism"
         ? fig.lines
             .filter((l) => ids.has(l.from) && ids.has(l.to) && l.from !== l.to)
-            .slice(0, Math.max(stars.length, 1) * 2)
+            .slice(0, Math.max(stars.length, 1) * 3)
         : [];
 
     const labelX = stars.reduce((a, s) => a + s.x, 0) / stars.length;
@@ -196,6 +196,8 @@ function sanitize(analysis: SkyAnalysis): SkyAnalysis {
 
     figures.push({
       ...fig,
+      kind,
+      name,
       stars,
       lines,
       labelX,
@@ -260,7 +262,7 @@ export async function analyzeNightSky(options: {
   const result = await withTimeout(
     generateText({
       model,
-      maxTokens: 1600,
+      maxTokens: 3200,
       messages: [
         {
           role: "user",

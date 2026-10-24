@@ -26,12 +26,31 @@ export type SubjectKey =
   | "naked_eye_comet"
   | "iss_crossing_moon_or_sun";
 
-const WEIGHT_CLARITY = 0.25;
-const WEIGHT_TRACKING = 0.2;
-const WEIGHT_EXPOSURE = 0.15;
-const WEIGHT_NOISE = 0.1;
-const WEIGHT_FRAMING = 0.2;
-const WEIGHT_CONDITIONS = 0.1;
+export const WEIGHT_CLARITY = 0.25;
+export const WEIGHT_TRACKING = 0.2;
+export const WEIGHT_EXPOSURE = 0.15;
+export const WEIGHT_NOISE = 0.1;
+export const WEIGHT_FRAMING = 0.2;
+export const WEIGHT_CONDITIONS = 0.1;
+
+/** Rubric weights for UI / explainability (must sum to 1). */
+export const RUBRIC_WEIGHTS = {
+  clarity: WEIGHT_CLARITY,
+  tracking: WEIGHT_TRACKING,
+  exposure: WEIGHT_EXPOSURE,
+  noise: WEIGHT_NOISE,
+  framing: WEIGHT_FRAMING,
+  conditions: WEIGHT_CONDITIONS,
+} as const;
+
+/** Final-score → rarity thresholds (before caps). */
+export const RARITY_THRESHOLDS: { min: number; rarity: RarityName }[] = [
+  { min: 90, rarity: "Legendary" },
+  { min: 75, rarity: "Epic" },
+  { min: 60, rarity: "Rare" },
+  { min: 45, rarity: "Uncommon" },
+  { min: 0, rarity: "Common" },
+];
 
 export const SUBJECT_BONUS: Record<SubjectKey, number> = {
   plate_solved_star_field: 0,
@@ -83,9 +102,15 @@ export interface ScoreResult {
   score: number | null;
   subjectBonus: number | null;
   finalScore: number | null;
+  /** Tier from finalScore before identity/EXIF caps. */
+  uncappedRarity: RarityName | null;
   rarity: RarityName | null;
   award: AwardResult | null;
   subjects: SubjectKey[];
+  identityMethod: IdentityMethod | null;
+  hasExifTime: boolean | null;
+  /** Human-readable reasons a cap lowered rarity (empty if none). */
+  capNotes: string[];
   /** Rubric ints used for the weighted quality score (0–10). */
   rubric: {
     clarity: number;
@@ -188,14 +213,21 @@ export function scorePhoto(opts: {
   cardFoil?: string | null;
 }): ScoreResult {
   const subjects = [...(opts.subjects ?? [])] as SubjectKey[];
+  const identityMethod = opts.identityMethod ?? "plate-solved";
+  const hasExifTime = opts.hasExifTime ?? true;
+
   if (!opts.isNightSky) {
     return {
       score: null,
       subjectBonus: null,
       finalScore: null,
+      uncappedRarity: null,
       rarity: null,
       award: null,
       subjects: [],
+      identityMethod: null,
+      hasExifTime: null,
+      capNotes: [],
       rubric: null,
     };
   }
@@ -219,19 +251,38 @@ export function scorePhoto(opts: {
   );
   const subjectBonus = subjectBonusFor(subjects);
   const finalScore = Math.min(100, score + subjectBonus);
-  const tier = tierForFinalScore(finalScore);
-  const rarity = applyCaps(tier, {
-    identityMethod: opts.identityMethod ?? "plate-solved",
-    hasExifTime: opts.hasExifTime ?? true,
+  const uncappedRarity = tierForFinalScore(finalScore);
+  const rarity = applyCaps(uncappedRarity, {
+    identityMethod,
+    hasExifTime,
   });
+
+  const capNotes: string[] = [];
+  if (
+    identityMethod === "model-estimate" &&
+    tierIndex(uncappedRarity) > tierIndex(CAP_MODEL_ESTIMATE)
+  ) {
+    capNotes.push(
+      `Model-estimate identity caps rarity at ${CAP_MODEL_ESTIMATE} (raw tier ${uncappedRarity}).`
+    );
+  }
+  if (!hasExifTime && tierIndex(uncappedRarity) > tierIndex(CAP_NO_EXIF_TIME)) {
+    capNotes.push(
+      `Missing capture time caps rarity at ${CAP_NO_EXIF_TIME}.`
+    );
+  }
 
   return {
     score,
     subjectBonus,
     finalScore,
+    uncappedRarity,
     rarity,
     award: awardFor(rarity, opts.cardFoil ?? null),
     subjects,
+    identityMethod,
+    hasExifTime,
+    capNotes,
     rubric,
   };
 }

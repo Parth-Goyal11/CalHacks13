@@ -185,21 +185,43 @@ export function SkyOverlay({
 
           return (
             <div key={figure.id}>
-              {points.map((p) => (
-                <button
-                  key={`${figure.id}-${p.id}`}
-                  type="button"
-                  aria-label={figure.name}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-0 bg-transparent"
-                  style={{
-                    left: `${p.x * 100}%`,
-                    top: `${p.y * 100}%`,
-                    width: 44,
-                    height: 44,
-                  }}
-                  onClick={() => onSelect(figure)}
-                />
-              ))}
+              {points.map((p) => {
+                const starName =
+                  figure.stars.find((s) => s.id === p.id)?.name ?? null;
+                const showStarLabel =
+                  selectedId === figure.id && starName && figure.stars.length > 1;
+                return (
+                  <div key={`${figure.id}-${p.id}`}>
+                    <button
+                      type="button"
+                      aria-label={starName ? `${starName} in ${figure.name}` : figure.name}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-0 bg-transparent"
+                      style={{
+                        left: `${p.x * 100}%`,
+                        top: `${p.y * 100}%`,
+                        width: 44,
+                        height: 44,
+                      }}
+                      onClick={() => onSelect(figure)}
+                    />
+                    {showStarLabel ? (
+                      <span
+                        className="pointer-events-none absolute -translate-x-1/2 text-[9px] tracking-wide text-zinc-100/90 sm:text-[10px]"
+                        style={{
+                          left: `${p.x * 100}%`,
+                          top: `${p.y * 100}%`,
+                          marginTop: 14,
+                          opacity: labelT * (dim ? 0.25 : 0.85),
+                          textShadow:
+                            "0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.9)",
+                        }}
+                      >
+                        {starName}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
 
               <button
                 type="button"

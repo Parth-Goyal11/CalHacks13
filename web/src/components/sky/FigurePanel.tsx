@@ -104,7 +104,10 @@ export function FigurePanel({ figure, meta, onClose }: FigurePanelProps) {
       {figure.stars.length > 0 ? (
         <div>
           <h3 className="text-xs uppercase tracking-wider text-zinc-500">
-            Stars marked
+            Structure · {figure.stars.length} stars
+            {figure.lines.length
+              ? ` · ${figure.lines.length} links`
+              : ""}
           </h3>
           <ul className="mt-2 flex flex-wrap gap-2">
             {figure.stars.map((s) => (
@@ -116,6 +119,21 @@ export function FigurePanel({ figure, meta, onClose }: FigurePanelProps) {
               </li>
             ))}
           </ul>
+          {figure.lines.length > 0 ? (
+            <ul className="mt-2 space-y-0.5 text-[11px] text-zinc-500">
+              {figure.lines.map((l, i) => {
+                const from =
+                  figure.stars.find((s) => s.id === l.from)?.name ?? l.from;
+                const to =
+                  figure.stars.find((s) => s.id === l.to)?.name ?? l.to;
+                return (
+                  <li key={`${l.from}-${l.to}-${i}`}>
+                    {from} — {to}
+                  </li>
+                );
+              })}
+            </ul>
+          ) : null}
         </div>
       ) : null}
 

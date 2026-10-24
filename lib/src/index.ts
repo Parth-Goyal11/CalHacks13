@@ -19,6 +19,8 @@ export type {
 
 export {
   AWARD_POINTS,
+  RARITY_THRESHOLDS,
+  RUBRIC_WEIGHTS,
   SUBJECT_BONUS,
   applyCaps,
   awardFor,
@@ -37,3 +39,14 @@ export type {
   ScoreResult,
   SubjectKey,
 } from "./sky-score";
+
+export {
+  BRIGHT_SKY_CATALOG,
+  buildSkyLocationContext,
+  localSiderealHours,
+} from "./sky-context";
+export type {
+  SkyCatalogEntry,
+  SkyLocationContext,
+  VisibleSkyHint,
+} from "./sky-context";
