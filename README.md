@@ -7,7 +7,7 @@ Real-time multiplayer game where players photograph real space events (ISS passe
 | Path | Role |
 |------|------|
 | `web/` | Next.js + Tailwind frontend (player UI, `/upload`, API proxy) |
-| `sky_photo/` | FastAPI Sky Photo service (ingest → metrics → Astrometry → overlay) |
+| `sky_photo/` | FastAPI Sky Photo service (ingest → metrics → Astrometry → vision judge → score → overlay) |
 | `ingest/` | Pull space-event data → Elasticsearch |
 | `spacetime/` | SpacetimeDB real-time backend (placeholder) |
 | `lib/` | Shared xAI Grok client (`ai` + `@ai-sdk/xai`) |
@@ -42,9 +42,10 @@ npm run dev
 ```
 
 - App: http://localhost:3000
-- Upload UI: http://localhost:3000/upload
+- Upload / Log “Add a photo”: http://localhost:3000/upload (identity badge, 6-bar rubric, critique, rarity frame)
 - Direct FastAPI health: http://127.0.0.1:8000/health
 - `ASTROMETRY_API_KEY` enables live plate-solve; without it, metrics still return with `identity.method = "model-estimate"`.
+- Vision judge is **xAI Grok only**. `VISION_API_KEY` or `XAI_API_KEY` enables it. The model returns a rubric only; score/rarity/points come from `sky_photo/score.py`. No key → `needs_review` and no score.
 
 ### Event ingest (Elastic)
 

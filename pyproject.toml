@@ -1,7 +1,7 @@
 [project]
 name = "orbitquest-sky-photo"
-version = "0.2.0"
-description = "SkyScore Sky Photo — plate-solve, judge, and score night-sky photos (CalHacks 13)"
+version = "0.3.0"
+description = "SkyScore Sky Photo — plate-solve, vision judge, and score night-sky photos (CalHacks 13)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

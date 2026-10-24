@@ -1,4 +1,4 @@
-"""FastAPI service for Sky Photo (phase 2: ingest + metrics + solve + overlay)."""
+"""FastAPI service for Sky Photo (phase 3: ingest + metrics + solve + vision + score)."""
 
 from __future__ import annotations
 
@@ -14,10 +14,10 @@ from sky_photo.score import score_photo
 
 app = FastAPI(
     title="OrbitQuest Sky Photo",
-    version="0.2.0",
+    version="0.3.0",
     description=(
-        "Phase 2: ingest, OpenCV metrics, Astrometry.net solve, annotated overlay. "
-        "Vision judge arrives in phase 3."
+        "Phase 3: ingest, OpenCV metrics, Astrometry.net solve, annotated overlay, "
+        "vision judge (xAI Grok), and deterministic scoring."
     ),
 )
 
@@ -35,8 +35,8 @@ async def sky_photo(
 ) -> JSONResponse:
     """Multipart: image + optional claimed_target / logged_pass_start.
 
-    Runs ingest → measure → early night-sky exit → plate-solve → annotate.
-    Vision/rubric/score remain stubbed (needs_review=True).
+    Runs ingest → measure → early night-sky exit → plate-solve → vision → score.
+    Without VISION_API_KEY, returns metrics + identity with needs_review=True.
     """
     content_type = (image.content_type or "").lower()
     data = await image.read()
@@ -53,13 +53,15 @@ async def sky_photo(
         logged_pass_start=logged_pass_start,
     )
     payload = outcome.record.model_dump()
-    payload["_phase"] = 2
+    payload["_phase"] = 3
     if outcome.status_code == 415:
         payload["detail"] = "Unsupported or undecodable image"
     elif outcome.status_code == 422:
         payload["detail"] = "Not a night-sky photo"
     elif outcome.status_code == 504:
         payload["detail"] = "Plate-solve timed out; metrics retained"
+    elif outcome.record.needs_review:
+        payload["detail"] = "Needs review (vision judge unavailable or invalid JSON)"
     return JSONResponse(status_code=outcome.status_code, content=payload)
 
 

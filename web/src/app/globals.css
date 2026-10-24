@@ -3,6 +3,12 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Sky Photo rarity frames (phase 4) */
+  --rarity-common: #71717a;
+  --rarity-uncommon: #34d399;
+  --rarity-rare: #38bdf8;
+  --rarity-epic: #a78bfa;
+  --rarity-legendary: #fbbf24;
 }
 
 @theme inline {
