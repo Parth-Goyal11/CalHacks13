@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { z } from "zod";
 import { createGrokClient } from "./grok";
+import { scoreSkyAnalysis, type ScoreResult } from "./sky-score";
 
 /** Normalized image coords: (0,0) top-left → (1,1) bottom-right. */
 export const skyStarSchema = z.object({
@@ -228,16 +229,23 @@ function sanitize(analysis: SkyAnalysis): SkyAnalysis {
   };
 }
 
+export interface SkyAnalysisWithScore {
+  analysis: SkyAnalysis;
+  /** Coded score / rarity / award points (never returned by the model). */
+  score: ScoreResult;
+}
+
 /**
  * Single-pass vision analysis — photo-first rules, fast model.
  * SpaceXAI track: Grok vision for celestial figure detection.
+ * Points / rarity are computed in sky-score.ts after sanitize.
  */
 export async function analyzeNightSky(options: {
   imageBase64: string;
   mimeType?: string;
   meta: SkyCaptureMeta;
   model?: string;
-}): Promise<SkyAnalysis> {
+}): Promise<SkyAnalysisWithScore> {
   const xai = createGrokClient();
   const modelId = options.model ?? VISION_MODEL;
   const model = xai(modelId);
@@ -273,7 +281,9 @@ export async function analyzeNightSky(options: {
   // Models sometimes omit figures entirely when unsure
   if (!Array.isArray(raw.figures)) raw.figures = [];
   const parsed = skyAnalysisSchema.parse(raw);
-  return sanitize(parsed);
+  const analysis = sanitize(parsed);
+  const score = scoreSkyAnalysis(analysis, options.meta);
+  return { analysis, score };
 }
 
 /** Deeper Grok narration when the user taps a figure. */

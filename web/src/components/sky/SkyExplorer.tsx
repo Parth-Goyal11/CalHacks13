@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { SkyAnalysis, SkyCaptureMeta, SkyFigure } from "@calhacks13/lib";
+import type {
+  ScoreResult,
+  SkyAnalysis,
+  SkyCaptureMeta,
+  SkyFigure,
+} from "@calhacks13/lib";
 import {
   dataUrlToBase64,
   fileToResizedDataUrl,
@@ -19,6 +24,7 @@ export function SkyExplorer() {
   const [dataUrl, setDataUrl] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState("image/jpeg");
   const [analysis, setAnalysis] = useState<SkyAnalysis | null>(null);
+  const [score, setScore] = useState<ScoreResult | null>(null);
   const [selected, setSelected] = useState<SkyFigure | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -50,6 +56,7 @@ export function SkyExplorer() {
     setMimeType(resized.mimeType);
     setPreviewUrl(resized.dataUrl);
     setAnalysis(null);
+    setScore(null);
     setSelected(null);
     setTakenAt(toDatetimeLocalValue(new Date()));
     setStep("meta");
@@ -167,6 +174,7 @@ export function SkyExplorer() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
       setAnalysis(data.analysis as SkyAnalysis);
+      setScore((data.score as ScoreResult) ?? null);
       setSelected(null);
       setStep("result");
     } catch (e) {
@@ -426,6 +434,7 @@ export function SkyExplorer() {
               onClick={() => {
                 setStep("capture");
                 setAnalysis(null);
+                setScore(null);
                 setSelected(null);
                 setPreviewUrl(null);
                 setDataUrl(null);
@@ -435,6 +444,36 @@ export function SkyExplorer() {
               New photo
             </button>
           </div>
+
+          {score?.finalScore != null && score.rarity && score.award ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3 text-sm">
+              <span className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+                Score
+              </span>
+              <span className="text-lg font-semibold text-zinc-50">
+                {score.finalScore}
+              </span>
+              <span className="rounded border border-zinc-700 px-2 py-0.5 text-xs text-zinc-300">
+                {score.rarity}
+              </span>
+              <span className="text-sky-300">
+                +{score.award.points} pts · {score.award.badge}
+              </span>
+              {score.subjectBonus ? (
+                <span className="text-xs text-zinc-500">
+                  quality {score.score} + subject {score.subjectBonus}
+                </span>
+              ) : (
+                <span className="text-xs text-zinc-500">
+                  quality {score.score} (model estimate · capped at Rare)
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-zinc-800 bg-zinc-950/80 px-4 py-3 text-sm text-zinc-500">
+              No award points — nothing was confidently identified in-frame.
+            </div>
+          )}
 
           <div className="overflow-hidden rounded-lg border border-zinc-800">
             <SkyOverlay

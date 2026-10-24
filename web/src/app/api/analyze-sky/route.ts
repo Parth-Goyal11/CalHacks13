@@ -38,13 +38,13 @@ export async function POST(request: Request) {
       );
     }
 
-    const analysis = await analyzeNightSky({
+    const { analysis, score } = await analyzeNightSky({
       imageBase64: body.imageBase64,
       mimeType: body.mimeType,
       meta: body.meta,
     });
 
-    return Response.json({ analysis });
+    return Response.json({ analysis, score });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
     console.error("[analyze-sky]", err);
