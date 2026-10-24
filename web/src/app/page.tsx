@@ -19,7 +19,7 @@ export default function Home() {
             href="/upload"
             className="inline-block rounded-md bg-zinc-100 px-5 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-white"
           >
-            Upload a sky photo
+            Add a photo
           </Link>
         </p>
       </main>

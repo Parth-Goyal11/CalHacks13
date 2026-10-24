@@ -42,7 +42,7 @@ npm run dev
 ```
 
 - App: http://localhost:3000
-- Upload UI: http://localhost:3000/upload
+- Upload / Log “Add a photo”: http://localhost:3000/upload (identity badge, 6-bar rubric, critique, rarity frame)
 - Direct FastAPI health: http://127.0.0.1:8000/health
 - `ASTROMETRY_API_KEY` enables live plate-solve; without it, metrics still return with `identity.method = "model-estimate"`.
 - `VISION_PROVIDER` is `grok` or `anthropic`. `VISION_API_KEY` (Grok also accepts `XAI_API_KEY`) enables the judge. The model returns a rubric only. Score, rarity, and points come from `sky_photo/score.py`. No key → `needs_review` and no score.
