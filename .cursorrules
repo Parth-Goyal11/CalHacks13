@@ -1,0 +1,38 @@
+# CalHacks 13 — Real-time Space Event Photography Game
+
+## Project overview
+
+TypeScript monorepo for a real-time multiplayer game: players photograph real space events (ISS passes, launches, meteor showers) to earn points. Photos are scored with AI; event data is indexed for search/RAG; game state syncs in real time.
+
+## Monorepo layout
+
+- `/web` — Next.js + Tailwind frontend (player UI, camera capture, leaderboards)
+- `/ingest` — Node scripts that pull space-event data and index it into Elasticsearch (`@elastic/elasticsearch`)
+- `/spacetime` — SpacetimeDB module (authoritative real-time game backend)
+- `/lib` — shared packages (xAI Grok client via `ai` + `@ai-sdk/xai`)
+
+## Hackathon tracks we are targeting
+
+### SpaceXAI (Cursor + Grok)
+- Build with **Cursor** as the primary IDE/agent workflow.
+- Use **xAI Grok** via the AI SDK (`ai`, `@ai-sdk/xai`) for scoring, narration, and agent features.
+- Integrate **Grok Imagine** and **Voice** APIs where they improve gameplay (e.g. event visualization, voice coaching during passes).
+- Keep the shared Grok client in `/lib` so web and ingest reuse one configured provider.
+
+### Elastic
+- Index space-event catalogs and derived embeddings in **Elasticsearch Cloud Serverless**.
+- Prefer **Jina embeddings** for semantic search over events, locations, and photo context.
+- Use **Agent Builder** and **Workflows** on Elastic Cloud Serverless for ingestion, enrichment, and agentic retrieval — not one-off ad-hoc scripts when a Workflow fits.
+- Config via `ELASTIC_URL` and `ELASTIC_API_KEY` (see `.env.example`).
+
+### Spacetime
+- **SpacetimeDB** is the real-time multiplayer backend (rooms, scores, presence, event windows).
+- Module code lives in `/spacetime`; keep game truth there, not only in the Next.js API layer.
+- Prefer SpacetimeDB subscriptions/reducers for live state over polling.
+
+## Conventions
+
+- TypeScript everywhere; Node >= 20.
+- Secrets only in `.env` (never commit); copy from `.env.example`.
+- Prefer small, composable modules; share types and AI clients through `/lib`.
+- When adding features, call out which track(s) they strengthen (SpaceXAI / Elastic / Spacetime).

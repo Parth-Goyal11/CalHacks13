@@ -1,0 +1,18 @@
+{
+  "name": "calhacks13",
+  "private": true,
+  "workspaces": [
+    "web",
+    "ingest",
+    "lib"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "ingest": "npm run ingest -w ingest",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
