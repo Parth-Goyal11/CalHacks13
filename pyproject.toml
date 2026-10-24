@@ -1,0 +1,28 @@
+[project]
+name = "orbitquest-sky-photo"
+version = "0.2.0"
+description = "SkyScore Sky Photo — plate-solve, judge, and score night-sky photos (CalHacks 13)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "opencv-python-headless",
+  "numpy",
+  "pillow",
+  "pillow-heif",
+  "httpx",
+  "pydantic",
+  "python-multipart",
+]
+
+[project.optional-dependencies]
+# Ask before enabling: pytest is not in the declared phase-1 stack.
+# Tests currently run with the stdlib: python -m unittest discover -s tests
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["sky_photo*"]
