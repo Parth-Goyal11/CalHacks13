@@ -332,7 +332,7 @@ export function buildSkyLocationContext(meta: SkyCaptureMeta): SkyLocationContex
       entry.raHours,
       entry.decDeg
     );
-    if (alt < 8) continue;
+    if (alt < 4) continue;
     if (!facingFilter(az, meta.facingDegrees)) continue;
     visible.push({
       name: entry.name,
@@ -344,7 +344,7 @@ export function buildSkyLocationContext(meta: SkyCaptureMeta): SkyLocationContex
   }
 
   visible.sort((a, b) => b.altitudeDeg - a.altitudeDeg);
-  const top = visible.slice(0, 10);
+  const top = visible.slice(0, 14);
 
   const lines = top.map(
     (v) =>
@@ -365,7 +365,7 @@ ${facing}${meta.notes ? `\nObserver notes: ${meta.notes}` : ""}
 Likely above the horizon right now (highest first):
 ${lines.length ? lines.join("\n") : "- (sparse prior — still mark any bright points you see)"}
 
-Matching rule: if a bright pattern in the photo matches a listed figure, identify ALL visible stick-figure stars with classic names and classic lines. Prefer more named stars over fewer.`;
+Matching rule: carefully examine each listed figure's region. Identify ALL visible stick-figure stars with classic names and classic lines — including fainter companions. Prefer a complete census over a short list.`;
 
   return {
     localSiderealHours: lst,

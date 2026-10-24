@@ -1,8 +1,7 @@
 /**
- * Logical matching test against the stick-figure star configuration database.
+ * Careful matching against the stick-figure star configuration database.
+ * Prefer recovering stars (name + geometry assignment) over wholesale rejection.
  * Runs AFTER Grok proposes figures and BEFORE score / UI generation.
- * Only stars that fit catalog geometry (or are lone objects without a pattern)
- * are kept on the analysis.
  */
 
 import type { FigureAlignment } from "./align-figures";
@@ -14,11 +13,13 @@ import {
 } from "./star-catalog";
 
 /** Max normalized image distance from catalog-predicted location. */
-const MAX_STAR_RESIDUAL = 0.085;
+const MAX_STAR_RESIDUAL = 0.14;
+/** Looser gate when assigning unnamed detections to leftover catalog stars. */
+const MAX_ASSIGN_RESIDUAL = 0.11;
 /** Minimum similarity score for a constellation figure to pass. */
-const MIN_FIGURE_FIT = 0.5;
-/** Need at least this many catalog-matched stars for a pattern figure. */
-const MIN_MATCHED_FOR_PATTERN = 3;
+const MIN_FIGURE_FIT = 0.32;
+/** Need at least this many verified stars for a pattern figure. */
+const MIN_KEEP_FOR_PATTERN = 2;
 
 export interface StarVerdict {
   figureId: string;
@@ -44,7 +45,6 @@ export interface FigureVerdict {
 }
 
 export interface VerificationReport {
-  /** True when at least one star / figure survived. */
   passed: boolean;
   acceptedStars: StarVerdict[];
   rejectedStars: StarVerdict[];
@@ -129,8 +129,152 @@ function fitSimilarity(
     err += Math.hypot(pred.x - p.ix, pred.y - p.iy);
   }
   const residual = err / n;
-  const score = Math.max(0, Math.min(1, 1 - residual / 0.12));
+  const score = Math.max(0, Math.min(1, 1 - residual / 0.16));
   return { score, residual, apply };
+}
+
+/**
+ * Re-fit using only inliers; drop worst outliers once if needed.
+ */
+function fitWithInliers(
+  pairs: { cx: number; cy: number; ix: number; iy: number; key: string }[]
+): {
+  fit: NonNullable<ReturnType<typeof fitSimilarity>>;
+  inlierKeys: Set<string>;
+} | null {
+  if (pairs.length < 2) return null;
+  let working = [...pairs];
+  for (let pass = 0; pass < 3; pass++) {
+    const fit = fitSimilarity(working);
+    if (!fit) return null;
+    const residuals = working.map((p) => {
+      const pred = fit.apply(p.cx, p.cy);
+      return {
+        key: p.key,
+        r: Math.hypot(pred.x - p.ix, pred.y - p.iy),
+        pair: p,
+      };
+    });
+    const inliers = residuals.filter((r) => r.r <= MAX_STAR_RESIDUAL);
+    if (inliers.length >= Math.min(MIN_KEEP_FOR_PATTERN, working.length)) {
+      if (inliers.length === working.length || inliers.length < 2) {
+        return {
+          fit,
+          inlierKeys: new Set(inliers.map((i) => i.key)),
+        };
+      }
+      working = inliers.map((i) => i.pair);
+      continue;
+    }
+    // Drop the worst and retry
+    residuals.sort((a, b) => b.r - a.r);
+    if (working.length <= MIN_KEEP_FOR_PATTERN) {
+      return {
+        fit,
+        inlierKeys: new Set(
+          residuals
+            .filter((r) => r.r <= MAX_STAR_RESIDUAL * 1.15)
+            .map((r) => r.key)
+        ),
+      };
+    }
+    const drop = residuals[0]?.key;
+    working = working.filter((p) => p.key !== drop);
+  }
+  const fit = fitSimilarity(working);
+  if (!fit) return null;
+  return {
+    fit,
+    inlierKeys: new Set(working.map((p) => p.key)),
+  };
+}
+
+function keepNamedAsLooseFigure(
+  figure: SkyFigure,
+  pattern: ConstellationPattern,
+  named: {
+    star: SkyStar;
+    catalogName: string;
+    cx: number;
+    cy: number;
+  }[],
+  rejectedExtra: StarVerdict[],
+  reason: string
+): {
+  figure: SkyFigure | null;
+  accepted: StarVerdict[];
+  rejected: StarVerdict[];
+  figureVerdict: FigureVerdict;
+} {
+  if (named.length === 0) {
+    return {
+      figure: null,
+      accepted: [],
+      rejected: rejectedExtra,
+      figureVerdict: {
+        figureId: figure.id,
+        figureName: pattern.name,
+        kind: pattern.kind,
+        accepted: false,
+        reason,
+        alignmentScore: null,
+      },
+    };
+  }
+
+  const keptStars = named.map((p) => p.star);
+  const idByCatalog = new Map(
+    named.map((p) => [normalizeStarName(p.catalogName), p.star.id] as const)
+  );
+  const lines = pattern.lines
+    .map((l) => {
+      const from = idByCatalog.get(normalizeStarName(l.from));
+      const to = idByCatalog.get(normalizeStarName(l.to));
+      if (!from || !to) return null;
+      return { from, to };
+    })
+    .filter((l): l is { from: string; to: string } => l !== null);
+
+  const accepted: StarVerdict[] = named.map((p) => ({
+    figureId: figure.id,
+    figureName: pattern.name,
+    starId: p.star.id,
+    starName: p.catalogName,
+    x: p.star.x,
+    y: p.star.y,
+    brightness: p.star.brightness ?? 0.65,
+    accepted: true,
+    reason: `Kept by catalog name under careful review (${reason})`,
+    residual: null,
+    catalogName: p.catalogName,
+  }));
+
+  const labelX =
+    keptStars.reduce((a, s) => a + s.x, 0) / Math.max(keptStars.length, 1);
+  const labelY =
+    keptStars.reduce((a, s) => a + s.y, 0) / Math.max(keptStars.length, 1);
+
+  return {
+    figure: {
+      ...figure,
+      name: pattern.name,
+      kind: keptStars.length >= 3 ? pattern.kind : "asterism",
+      stars: keptStars,
+      lines,
+      labelX,
+      labelY,
+    },
+    accepted,
+    rejected: rejectedExtra,
+    figureVerdict: {
+      figureId: figure.id,
+      figureName: pattern.name,
+      kind: pattern.kind,
+      accepted: true,
+      reason: `Partial keep: ${keptStars.length} catalog-named star(s). ${reason}`,
+      alignmentScore: null,
+    },
+  };
 }
 
 function verifyPatternFigure(figure: SkyFigure): {
@@ -141,32 +285,11 @@ function verifyPatternFigure(figure: SkyFigure): {
 } {
   const pattern = findConstellationPattern(figure.name);
   if (!pattern) {
-    const rejected = figure.stars.map((s) => ({
-      figureId: figure.id,
-      figureName: figure.name,
-      starId: s.id,
-      starName: s.name ?? s.id,
-      x: s.x,
-      y: s.y,
-      brightness: s.brightness ?? 0.65,
-      accepted: false,
-      reason: `No star-configuration entry for “${figure.name}” — rejected until catalog match.`,
-      residual: null,
-      catalogName: null,
-    }));
-    return {
-      figure: null,
-      accepted: [],
-      rejected,
-      figureVerdict: {
-        figureId: figure.id,
-        figureName: figure.name,
-        kind: figure.kind,
-        accepted: false,
-        reason: "No constellation configuration in the alignment database.",
-        alignmentScore: null,
-      },
-    };
+    // Unknown name but real points — keep as provisional lone/group stars.
+    return verifyLoneFigure({
+      ...figure,
+      kind: figure.kind === "constellation" ? "asterism" : figure.kind,
+    }, `Provisional (no DB pattern for “${figure.name}”).`);
   }
 
   type Pair = {
@@ -176,24 +299,12 @@ function verifyPatternFigure(figure: SkyFigure): {
     cy: number;
   };
   const named: Pair[] = [];
-  const unnamedRejected: StarVerdict[] = [];
+  const unnamed: SkyStar[] = [];
 
   for (const star of figure.stars) {
     const m = matchCatalogStar(star, pattern);
     if (!m) {
-      unnamedRejected.push({
-        figureId: figure.id,
-        figureName: pattern.name,
-        starId: star.id,
-        starName: star.name ?? star.id,
-        x: star.x,
-        y: star.y,
-        brightness: star.brightness ?? 0.65,
-        accepted: false,
-        reason: `Name “${star.name ?? star.id}” not in ${pattern.name} configuration database.`,
-        residual: null,
-        catalogName: null,
-      });
+      unnamed.push(star);
       continue;
     }
     named.push({
@@ -204,88 +315,73 @@ function verifyPatternFigure(figure: SkyFigure): {
     });
   }
 
-  if (named.length < MIN_MATCHED_FOR_PATTERN) {
-    const rejected = [
-      ...unnamedRejected,
-      ...named.map((p) => ({
+  // Dedupe catalog names — keep brightest / first
+  const byCat = new Map<string, Pair>();
+  for (const p of named) {
+    const k = normalizeStarName(p.catalogName);
+    const prev = byCat.get(k);
+    if (!prev || (p.star.brightness ?? 0) > (prev.star.brightness ?? 0)) {
+      byCat.set(k, p);
+    }
+  }
+  const uniqueNamed = [...byCat.values()];
+
+  if (uniqueNamed.length < 2) {
+    return keepNamedAsLooseFigure(
+      figure,
+      pattern,
+      uniqueNamed,
+      unnamed.map((s) => ({
         figureId: figure.id,
         figureName: pattern.name,
-        starId: p.star.id,
-        starName: p.catalogName,
-        x: p.star.x,
-        y: p.star.y,
-        brightness: p.star.brightness ?? 0.65,
+        starId: s.id,
+        starName: s.name ?? s.id,
+        x: s.x,
+        y: s.y,
+        brightness: s.brightness ?? 0.65,
         accepted: false,
-        reason: `Only ${named.length} catalog name matches — need ≥${MIN_MATCHED_FOR_PATTERN} for ${pattern.name}.`,
+        reason: `Could not assign to ${pattern.name} without a geometry fit (≥2 named anchors).`,
         residual: null,
-        catalogName: p.catalogName,
+        catalogName: null,
       })),
-    ];
-    return {
-      figure: null,
-      accepted: [],
-      rejected,
-      figureVerdict: {
-        figureId: figure.id,
-        figureName: pattern.name,
-        kind: pattern.kind,
-        accepted: false,
-        reason: `Failed match test: ${named.length}/${pattern.stars.length} named — need ≥${MIN_MATCHED_FOR_PATTERN}.`,
-        alignmentScore: null,
-      },
-    };
+      `Only ${uniqueNamed.length} catalog name anchor(s).`
+    );
   }
 
-  const fit = fitSimilarity(
-    named.map((p) => ({
+  const fitted = fitWithInliers(
+    uniqueNamed.map((p) => ({
       cx: p.cx,
       cy: p.cy,
       ix: p.star.x,
       iy: p.star.y,
+      key: normalizeStarName(p.catalogName),
     }))
   );
 
-  if (!fit || fit.score < MIN_FIGURE_FIT) {
-    const rejected = [
-      ...unnamedRejected,
-      ...named.map((p) => ({
-        figureId: figure.id,
-        figureName: pattern.name,
-        starId: p.star.id,
-        starName: p.catalogName,
-        x: p.star.x,
-        y: p.star.y,
-        brightness: p.star.brightness ?? 0.65,
-        accepted: false,
-        reason: `Configuration geometry failed for ${pattern.name} (fit ${fit ? (fit.score * 100).toFixed(0) : 0}%).`,
-        residual: fit?.residual ?? null,
-        catalogName: p.catalogName,
-      })),
-    ];
-    return {
-      figure: null,
-      accepted: [],
-      rejected,
-      figureVerdict: {
-        figureId: figure.id,
-        figureName: pattern.name,
-        kind: pattern.kind,
-        accepted: false,
-        reason: `Stick-figure geometry does not match ${pattern.name} database (fit ${Math.round((fit?.score ?? 0) * 100)}%).`,
-        alignmentScore: fit?.score ?? null,
-      },
-    };
+  if (!fitted || fitted.fit.score < MIN_FIGURE_FIT) {
+    return keepNamedAsLooseFigure(
+      figure,
+      pattern,
+      uniqueNamed,
+      [],
+      `Geometry soft-fail (fit ${Math.round((fitted?.fit.score ?? 0) * 100)}%) — kept named anchors.`
+    );
   }
 
+  const { fit, inlierKeys } = fitted;
   const accepted: StarVerdict[] = [];
-  const rejected: StarVerdict[] = [...unnamedRejected];
+  const rejected: StarVerdict[] = [];
   const keptStars: SkyStar[] = [];
   const idByCatalog = new Map<string, string>();
+  const usedCatalog = new Set<string>();
 
-  for (const p of named) {
+  for (const p of uniqueNamed) {
+    const key = normalizeStarName(p.catalogName);
     const pred = fit.apply(p.cx, p.cy);
     const residual = Math.hypot(pred.x - p.star.x, pred.y - p.star.y);
-    if (residual > MAX_STAR_RESIDUAL) {
+    const inlier =
+      inlierKeys.has(key) && residual <= MAX_STAR_RESIDUAL * 1.05;
+    if (!inlier) {
       rejected.push({
         figureId: figure.id,
         figureName: pattern.name,
@@ -295,14 +391,15 @@ function verifyPatternFigure(figure: SkyFigure): {
         y: p.star.y,
         brightness: p.star.brightness ?? 0.65,
         accepted: false,
-        reason: `Location off catalog prediction for ${p.catalogName} (Δ ${(residual * 100).toFixed(1)}%).`,
+        reason: `Outlier vs ${pattern.name} configuration (Δ ${(residual * 100).toFixed(1)}%).`,
         residual,
         catalogName: p.catalogName,
       });
       continue;
     }
     keptStars.push(p.star);
-    idByCatalog.set(normalizeStarName(p.catalogName), p.star.id);
+    usedCatalog.add(key);
+    idByCatalog.set(key, p.star.id);
     accepted.push({
       figureId: figure.id,
       figureName: pattern.name,
@@ -312,33 +409,74 @@ function verifyPatternFigure(figure: SkyFigure): {
       y: p.star.y,
       brightness: p.star.brightness ?? 0.65,
       accepted: true,
-      reason: `Catalog match · ${pattern.name} · Δ ${(residual * 100).toFixed(1)}%`,
+      reason: `Catalog+geometry · ${pattern.name} · Δ ${(residual * 100).toFixed(1)}%`,
       residual,
       catalogName: p.catalogName,
     });
   }
 
-  if (keptStars.length < MIN_MATCHED_FOR_PATTERN) {
-    for (const a of accepted) {
-      rejected.push({
-        ...a,
-        accepted: false,
-        reason: `Dropped: fewer than ${MIN_MATCHED_FOR_PATTERN} stars survived location test for ${pattern.name}.`,
-      });
+  // Careful second look: assign unnamed detections to leftover catalog stars.
+  const leftoverCatalog = pattern.stars.filter(
+    (c) => !usedCatalog.has(normalizeStarName(c.name))
+  );
+  const unusedDetections = [...unnamed];
+
+  for (const cat of leftoverCatalog) {
+    const pred = fit.apply(cat.x, cat.y);
+    let best: { star: SkyStar; dist: number } | null = null;
+    for (const star of unusedDetections) {
+      const dist = Math.hypot(pred.x - star.x, pred.y - star.y);
+      if (dist > MAX_ASSIGN_RESIDUAL) continue;
+      if (!best || dist < best.dist) best = { star, dist };
     }
-    return {
-      figure: null,
-      accepted: [],
+    if (!best) continue;
+    unusedDetections.splice(unusedDetections.indexOf(best.star), 1);
+    const renamed = { ...best.star, name: cat.name };
+    keptStars.push(renamed);
+    const key = normalizeStarName(cat.name);
+    usedCatalog.add(key);
+    idByCatalog.set(key, renamed.id);
+    accepted.push({
+      figureId: figure.id,
+      figureName: pattern.name,
+      starId: renamed.id,
+      starName: cat.name,
+      x: renamed.x,
+      y: renamed.y,
+      brightness: renamed.brightness ?? 0.65,
+      accepted: true,
+      reason: `Geometry assign → ${cat.name} (Δ ${(best.dist * 100).toFixed(1)}%)`,
+      residual: best.dist,
+      catalogName: cat.name,
+    });
+  }
+
+  for (const star of unusedDetections) {
+    rejected.push({
+      figureId: figure.id,
+      figureName: pattern.name,
+      starId: star.id,
+      starName: star.name ?? star.id,
+      x: star.x,
+      y: star.y,
+      brightness: star.brightness ?? 0.65,
+      accepted: false,
+      reason: `No ${pattern.name} catalog seat near this detection.`,
+      residual: null,
+      catalogName: null,
+    });
+  }
+
+  if (keptStars.length < MIN_KEEP_FOR_PATTERN) {
+    return keepNamedAsLooseFigure(
+      figure,
+      pattern,
+      uniqueNamed.filter((p) =>
+        keptStars.some((s) => s.id === p.star.id)
+      ),
       rejected,
-      figureVerdict: {
-        figureId: figure.id,
-        figureName: pattern.name,
-        kind: pattern.kind,
-        accepted: false,
-        reason: `Location test left ${keptStars.length} stars — need ≥${MIN_MATCHED_FOR_PATTERN}.`,
-        alignmentScore: fit.score,
-      },
-    };
+      "Too few inliers after careful geometry pass."
+    );
   }
 
   const lines = pattern.lines
@@ -355,6 +493,10 @@ function verifyPatternFigure(figure: SkyFigure): {
   const labelY =
     keptStars.reduce((a, s) => a + s.y, 0) / Math.max(keptStars.length, 1);
 
+  const missing = pattern.stars
+    .filter((c) => !usedCatalog.has(normalizeStarName(c.name)))
+    .map((c) => c.name);
+
   return {
     figure: {
       ...figure,
@@ -364,7 +506,11 @@ function verifyPatternFigure(figure: SkyFigure): {
       lines,
       labelX,
       labelY,
-      confidence: Math.min(figure.confidence, 0.55 + fit.score * 0.4),
+      confidence: Math.min(1, Math.max(figure.confidence, 0.5 + fit.score * 0.4)),
+      summary:
+        missing.length > 0
+          ? `${figure.summary} (still missing in photo/catalog seat: ${missing.slice(0, 4).join(", ")}${missing.length > 4 ? "…" : ""})`
+          : figure.summary,
     },
     accepted,
     rejected,
@@ -373,19 +519,21 @@ function verifyPatternFigure(figure: SkyFigure): {
       figureName: pattern.name,
       kind: pattern.kind,
       accepted: true,
-      reason: `Passed ${pattern.name} configuration test (${keptStars.length} stars, fit ${(fit.score * 100).toFixed(0)}%).`,
+      reason: `Careful match: ${keptStars.length}/${pattern.stars.length} stars, fit ${(fit.score * 100).toFixed(0)}%.`,
       alignmentScore: fit.score,
     },
   };
 }
 
-function verifyLoneFigure(figure: SkyFigure): {
+function verifyLoneFigure(
+  figure: SkyFigure,
+  provisionalNote?: string
+): {
   figure: SkyFigure | null;
   accepted: StarVerdict[];
   rejected: StarVerdict[];
   figureVerdict: FigureVerdict;
 } {
-  // Planets / moons / lone stars: accept finite in-frame points; no stick-figure DB.
   const accepted: StarVerdict[] = [];
   const rejected: StarVerdict[] = [];
   const kept: SkyStar[] = [];
@@ -408,7 +556,8 @@ function verifyLoneFigure(figure: SkyFigure): {
       brightness: s.brightness ?? 0.65,
       accepted: ok,
       reason: ok
-        ? `Accepted ${figure.kind} point (no stick-figure config required).`
+        ? provisionalNote ??
+          `Accepted ${figure.kind} point (in-frame location check).`
         : "Coordinates out of frame — rejected.",
       residual: null,
       catalogName: null,
@@ -438,7 +587,7 @@ function verifyLoneFigure(figure: SkyFigure): {
   }
 
   return {
-    figure: { ...figure, stars: kept, lines: [] },
+    figure: { ...figure, stars: kept },
     accepted,
     rejected,
     figureVerdict: {
@@ -446,15 +595,17 @@ function verifyLoneFigure(figure: SkyFigure): {
       figureName: figure.name,
       kind: figure.kind,
       accepted: true,
-      reason: `Accepted as ${figure.kind} (location in frame).`,
+      reason:
+        provisionalNote ??
+        `Accepted as ${figure.kind} (${kept.length} in-frame point(s)).`,
       alignmentScore: null,
     },
   };
 }
 
 /**
- * Run the configuration matching test and rebuild analysis with only
- * stars/figures that pass. Call this before score / UI generation.
+ * Careful configuration matching — recover what fits, keep partials,
+ * only drop clear outliers. Call before score / UI generation.
  */
 export function verifyAgainstStarDatabase(
   analysis: SkyAnalysis,
@@ -483,9 +634,10 @@ export function verifyAgainstStarDatabase(
     if (result.figure) figures.push(result.figure);
   }
 
-  // Stable reveal order: brighter first within each accepted figure order.
   acceptedStars.sort((a, b) => {
-    if (a.figureId !== b.figureId) return 0;
+    if (a.figureId !== b.figureId) {
+      return a.figureName.localeCompare(b.figureName);
+    }
     return b.brightness - a.brightness;
   });
 
@@ -496,7 +648,7 @@ export function verifyAgainstStarDatabase(
       kind: "other",
       confidence: 0.3,
       summary:
-        "Grok proposals did not pass the star-configuration matching test.",
+        "Proposals did not pass the careful star-configuration matching test.",
       description:
         rejectedStars.length > 0
           ? `Rejected ${rejectedStars.length} proposed point(s). Re-shoot or check location/time.`
@@ -510,14 +662,14 @@ export function verifyAgainstStarDatabase(
 
   const passed = acceptedStars.length > 0;
   const summary = passed
-    ? `Match test: ${acceptedStars.length} star(s) verified, ${rejectedStars.length} rejected, ${figureVerdicts.filter((f) => f.accepted).length} figure(s) kept.`
-    : `Match test failed: 0 stars verified (${rejectedStars.length} rejected).`;
+    ? `Careful match: ${acceptedStars.length} star(s) verified, ${rejectedStars.length} rejected, ${figureVerdicts.filter((f) => f.accepted).length} figure(s) kept.`
+    : `Match test found 0 verified stars (${rejectedStars.length} rejected).`;
 
   return {
     analysis: {
       ...analysis,
       figures,
-      overview: `${analysis.overview}\n\n${summary}`,
+      overview: analysis.overview,
     },
     verification: {
       passed,

@@ -75,27 +75,32 @@ export const VISION_MODEL: string =
   (typeof process !== "undefined" && process.env.SKY_VISION_MODEL) ||
   "grok-4.20-0309-non-reasoning";
 
-const ANALYSIS_TIMEOUT_MS = 90_000;
-const MIN_CONFIDENCE = 0.35;
+const ANALYSIS_TIMEOUT_MS = 100_000;
+const MIN_CONFIDENCE = 0.28;
 
 function buildPrompt(meta: SkyCaptureMeta): string {
   const sky = buildSkyLocationContext(meta);
   const alignDb = catalogPromptBlock(sky.visible.map((v) => v.name));
 
-  return `Deep night-sky scan for OrbitQuest. Use the natural photo as-is (no assumed filters). Do a thorough pass — not a quick skim.
+  return `EXHAUSTIVE night-sky census for OrbitQuest. Examine the photo carefully — region by region — not a quick skim. Natural photo, no assumed filters.
 
 ${sky.promptBlock}
 
 ${alignDb}
 
-DEEP SCAN RULES:
-1. First pass: mark the brightest stars/planets. Second pass: re-scan each constellation region for fainter companions (roughly mag ≤ 4) that complete the stick figure.
-2. Put x,y on real pixels only (0=left/top, 1=right/bottom). brightness 0–1 from how bright it looks in THIS photo.
-3. LOCATION + ALIGNMENT DB name what you see: use catalog star names and classic lines. Include ALL catalog stars that are actually visible — never stop at 3 if more are in frame.
-4. Do NOT invent stars that are not points in the image. If a prior figure is not recognizable, omit it.
-5. Prefer a complete sky census: 4–10 figures when rich. Also list lone bright stars/planets as kind "star"/"planet".
-6. Constellation/asterism: ≥3 visible stars + classic lines[] (alignment DB topology). Star ids = short slugs; names = classic proper names.
-7. confidence < 0.35 → omit. overview must say how location/time guided the IDs and note any catalog stars still too faint to mark.
+CAREFUL MULTI-PASS SCAN (do all three mentally before writing JSON):
+Pass A — Bright anchors: mark the brightest stars/planets you can clearly see.
+Pass B — Stick-figure fill: for EACH matching alignment-DB figure, re-examine that region pixel-by-pixel and mark every catalog star that is a real point (mag ≲ 4.5), including faint ones.
+Pass C — Leftovers: scan corners/edges for lone bright stars/planets not yet listed; add them as kind "star"/"planet".
+
+RULES:
+1. x,y on real pixels only (0=left/top, 1=right/bottom). brightness 0–1 from THIS photo.
+2. Use LOCATION + ALIGNMENT DB names exactly (Betelgeuse, Rigel, Dubhe…). Never stop at 3 stars if more catalog stars are visible.
+3. Do NOT invent stars that are not points in the image. Omit a figure only if its pattern is truly absent.
+4. Aim for completeness: 5–12 figures when the sky is rich. Each constellation's stars[] should be as complete as the photo allows.
+5. lines[] = classic alignment-DB segments between listed star ids only.
+6. Star ids = short slugs; names = classic proper names from the DB.
+7. confidence < 0.28 → omit that figure. overview: how location helped + which catalog stars were too faint to mark.
 
 Return ONLY JSON (no fences):
 {
@@ -273,7 +278,7 @@ export async function analyzeNightSky(options: {
   const result = await withTimeout(
     generateText({
       model,
-      maxTokens: 4500,
+      maxTokens: 6000,
       messages: [
         {
           role: "user",
