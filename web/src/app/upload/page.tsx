@@ -6,6 +6,7 @@ import { FormEvent, useState } from "react";
 type SkyPhotoResult = {
   photo_id?: string;
   is_night_sky?: boolean;
+  needs_review?: boolean;
   detail?: string;
   identity?: {
     method?: string;
@@ -18,6 +19,8 @@ type SkyPhotoResult = {
     star_count?: number;
     trailing?: number;
   };
+  rarity?: string | null;
+  final_score?: number | null;
   annotated_image_url?: string | null;
   _phase?: number;
 };
@@ -83,8 +86,8 @@ export default function UploadPage() {
             Upload a sky photo
           </h1>
           <p className="text-zinc-400">
-            Proxies to the local FastAPI Sky Photo service (plate-solve +
-            metrics). Start uvicorn on port 8000 first.
+            Proxies to the local FastAPI Sky Photo service (plate-solve,
+            metrics, vision judge). Start uvicorn on port 8000 first.
           </p>
         </div>
 
@@ -134,7 +137,17 @@ export default function UploadPage() {
               {result.identity?.method
                 ? ` · ${result.identity.method}`
                 : ""}
+              {result.rarity ? ` · ${result.rarity}` : ""}
+              {result.final_score != null
+                ? ` · score ${result.final_score}`
+                : ""}
             </p>
+            {result.needs_review ? (
+              <p className="rounded border border-amber-800/70 bg-amber-950/40 px-3 py-2 text-amber-100">
+                Needs review — vision judge unavailable or returned invalid
+                JSON. Metrics and solve data are still shown.
+              </p>
+            ) : null}
             {result.identity?.constellations?.length ? (
               <p>
                 Constellations:{" "}

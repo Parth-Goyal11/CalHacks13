@@ -1,7 +1,4 @@
-"""Phase-2 pipeline: ingest → measure → (early exit) → plate-solve → annotate.
-
-Vision / rubric / final scoring stay stubbed until phase 3.
-"""
+"""Sky Photo pipeline: ingest → measure → solve → vision judge → score → annotate."""
 
 from __future__ import annotations
 
@@ -10,6 +7,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from PIL import Image
 
@@ -30,12 +28,19 @@ from sky_photo.ingest import (
 from sky_photo.metrics import ImageMetrics, is_night_sky, measure
 from sky_photo.models import (
     Area,
+    Award,
     Evidence,
     Identity,
     Metrics,
     SkyPhotoRecord,
 )
 from sky_photo.overlay import save_annotated_jpeg
+from sky_photo.vision import (
+    JudgmentOutcome,
+    VisionClient,
+    analyze_outcome,
+    apply_judgment,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +54,7 @@ class PipelineOutcome:
     ingest: IngestResult | None = None
     metrics: ImageMetrics | None = None
     solve: SolveResult | None = None
+    vision: JudgmentOutcome | None = None
 
 
 def _hints_from_ingest(ingest: IngestResult) -> SolveHints | None:
@@ -127,8 +133,6 @@ def _identity_from_solve(solve: SolveResult | None) -> Identity:
             ),
             other=other,
         )
-    # Failed / timed-out / skipped solve → labelled estimate placeholder.
-    # Vision (phase 3) will fill text; confidence capped at 0.6 per design.
     err = None if solve is None else solve.error
     return Identity(
         method="model-estimate",
@@ -143,6 +147,41 @@ def _identity_from_solve(solve: SolveResult | None) -> Identity:
     )
 
 
+def _solver_context(solve: SolveResult | None) -> dict[str, Any] | None:
+    if solve is None or not solve.solved:
+        return None
+    return {
+        "center_ra_deg": solve.center_ra_deg,
+        "center_dec_deg": solve.center_dec_deg,
+        "field_width_deg": solve.field_width_deg,
+        "rotation_deg": solve.rotation_deg,
+        "constellations": solve.constellations,
+        "named_stars": solve.named_stars,
+        "deep_sky": solve.deep_sky,
+    }
+
+
+def _exif_context(ingest: IngestResult) -> dict[str, Any]:
+    ex = ingest.exif
+    return {
+        "time": ex.datetime_original,
+        "exposure_s": ex.exposure_time,
+        "iso": ex.iso,
+        "focal_length_mm": ex.focal_length_mm,
+    }
+
+
+def _metrics_context(m: Metrics) -> dict[str, Any]:
+    return {
+        "sharpness": m.sharpness,
+        "trailing": m.trailing,
+        "clipped_pct": m.clipped_pct,
+        "noise_sigma": m.noise_sigma,
+        "star_count": m.star_count,
+        "horizon_tilt_deg": m.horizon_tilt_deg,
+    }
+
+
 def _evidence(
     ingest: IngestResult,
     *,
@@ -152,7 +191,6 @@ def _evidence(
     if ingest.area_lat is not None and ingest.area_lon is not None:
         area = Area(lat=ingest.area_lat, lon=ingest.area_lon)
 
-    # Geographic match needs observer coords (not in the form yet) → False.
     matches = False
     if logged_pass_start and ingest.exif.datetime_original:
         pass_dt = parse_iso_time(logged_pass_start)
@@ -179,11 +217,7 @@ def _maybe_annotate(
     ingest: IngestResult,
     solve: SolveResult | None,
 ) -> tuple[str | None, str | None]:
-    """Write annotated JPEG when plate-solved with pixel annotations.
-
-    Returns (annotated_path, annotated_image_url). Both None when labels
-    cannot be drawn honestly (failed solve / no pixel coords).
-    """
+    """Write annotated JPEG when plate-solved with pixel annotations."""
     if solve is None or not solve.solved or not solve.annotation_points:
         return None, None
 
@@ -209,17 +243,18 @@ def process_sky_photo(
     claimed_target: str | None = None,
     logged_pass_start: str | None = None,
     skip_solve: bool = False,
+    skip_vision: bool = False,
+    vision_client: VisionClient | None = None,
 ) -> PipelineOutcome:
-    """Run ingest + metrics + optional plate-solve + annotate.
+    """Run ingest → metrics → solve → vision → score → annotate.
 
     Status codes:
-    - 200 success (metrics filled; identity from solve or model-estimate stub)
+    - 200 success
     - 415 unsupported image type / decode failure
-    - 422 not night-sky (early exit before solve/model)
-    - 504 solver timeout (metrics + model-estimate identity still returned)
+    - 422 not night-sky (early exit or vision says so)
+    - 504 solver timeout (metrics + vision/model-estimate still returned)
     """
     photo_id = f"ph_{uuid.uuid4().hex[:16]}"
-    _ = claimed_target  # forwarded to vision in phase 3
 
     try:
         ingest = ingest_image(image_bytes, content_type)
@@ -233,13 +268,14 @@ def process_sky_photo(
 
     metrics = measure(ingest.full_gray)
     metrics_model = _metrics_model(metrics)
+    evidence = _evidence(ingest, logged_pass_start=logged_pass_start)
 
     if not is_night_sky(metrics):
         record = SkyPhotoRecord(
             photo_id=photo_id,
             is_night_sky=False,
             metrics=metrics_model,
-            evidence=_evidence(ingest, logged_pass_start=logged_pass_start),
+            evidence=evidence,
             needs_review=False,
         )
         _persist(record)
@@ -268,23 +304,92 @@ def process_sky_photo(
             logger.exception("Astrometry solve failed: %s", exc)
             solve = SolveResult(solved=False, error=str(exc))
 
-    identity = _identity_from_solve(solve)
+    fallback_identity = _identity_from_solve(solve)
     annotated_path, annotated_url = _maybe_annotate(photo_id, ingest, solve)
+
+    vision_outcome: JudgmentOutcome | None = None
+    if skip_vision:
+        vision_outcome = JudgmentOutcome(
+            judgment=None,
+            needs_review=True,
+            skipped=True,
+            error="vision skipped",
+            attempts=0,
+        )
+    else:
+        context = {
+            "solver": _solver_context(solve),
+            "metrics": _metrics_context(metrics_model),
+            "exif": _exif_context(ingest),
+            "claimed_target": claimed_target,
+        }
+        vision_outcome = analyze_outcome(
+            ingest.model_jpeg_bytes,
+            context,
+            client=vision_client,
+        )
+
+    applied = apply_judgment(
+        solve=solve,
+        outcome=vision_outcome,
+        area_lat=ingest.area_lat,
+        matches_logged_pass=evidence.matches_logged_pass,
+        has_exif_time=bool(ingest.exif.datetime_original),
+        fallback_identity=fallback_identity,
+    )
+
+    if not applied.is_night_sky:
+        record = SkyPhotoRecord(
+            photo_id=photo_id,
+            is_night_sky=False,
+            identity=None,
+            metrics=metrics_model,
+            rubric=None,
+            critique=None,
+            evidence=evidence,
+            needs_review=False,
+            annotated_path=None,
+            annotated_image_url=None,
+        )
+        _persist(record)
+        return PipelineOutcome(
+            record=record,
+            status_code=422,
+            ingest=ingest,
+            metrics=metrics,
+            solve=solve,
+            vision=vision_outcome,
+        )
+
+    award = None
+    score = subject_bonus = final_score = rarity = None
+    if applied.score is not None:
+        scored = applied.score
+        score = scored.score
+        subject_bonus = scored.subject_bonus
+        final_score = scored.final_score
+        rarity = scored.rarity
+        if scored.award is not None:
+            award = Award(
+                badge=scored.award.badge,
+                points=scored.award.points,
+                card_foil=scored.award.card_foil,
+            )
 
     record = SkyPhotoRecord(
         photo_id=photo_id,
         is_night_sky=True,
-        identity=identity,
+        identity=applied.identity,
         metrics=metrics_model,
-        rubric=None,  # vision phase 3
-        critique=None,
-        score=None,
-        subject_bonus=None,
-        final_score=None,
-        rarity=None,
-        award=None,
-        evidence=_evidence(ingest, logged_pass_start=logged_pass_start),
-        needs_review=True,  # no vision/rubric yet
+        rubric=applied.rubric,
+        critique=applied.critique,
+        score=score,
+        subject_bonus=subject_bonus,
+        final_score=final_score,
+        rarity=rarity,
+        award=award,
+        evidence=evidence,
+        needs_review=applied.needs_review or applied.rubric is None,
         annotated_path=annotated_path,
         annotated_image_url=annotated_url,
     )
@@ -295,4 +400,5 @@ def process_sky_photo(
         ingest=ingest,
         metrics=metrics,
         solve=solve,
+        vision=vision_outcome,
     )
