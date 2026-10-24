@@ -1,0 +1,173 @@
+.root {
+  --night: #0b0d12;
+  --surface: #161b24;
+  --raised: #202734;
+  --text: #f1f3f7;
+  --muted: #adb7c8;
+  --accent: #b8d1f3;
+  --action-text: #142034;
+  width: 100%; min-height: 100dvh; color-scheme: dark;
+  background: var(--night); color: var(--text);
+  font-family: var(--font-geist-sans), Arial, sans-serif; font-size: 16px; -webkit-font-smoothing: antialiased;
+}
+.root *, .root *::before, .root *::after { box-sizing: border-box; }
+.root h1, .root h2, .root h3, .root p { margin: 0; }
+.root h1 { font-size: 34px; line-height: 1.15; letter-spacing: -1.1px; font-weight: 650; }
+.root h2 { font-size: 20px; line-height: 1.3; letter-spacing: -.4px; font-weight: 600; }
+.root button, .root input { font: inherit; }
+.root button, .root a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.root button { cursor: pointer; }
+.root button:disabled, .root button[aria-disabled="true"] { cursor: wait; opacity: .65; }
+.root a { color: inherit; text-decoration: none; }
+.root svg { width: 20px; height: 20px; flex-shrink: 0; }
+.root :is(a, button, input):focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.root summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.root :is(h1, h2, h3) { text-wrap: balance; }
+.root :is(p, strong, label) { overflow-wrap: anywhere; }
+.root ::selection { background: var(--accent); color: var(--action-text); }
+.root :is(input, textarea) { caret-color: var(--accent); }
+.captureFlow { line-height: 1.6; overflow-wrap: anywhere; }
+.captureFlow input { min-height: 48px; min-width: 0; width: 100%; padding: 12px; border: 1px solid #71829a; border-radius: 12px; background: var(--surface); color: var(--text); font-size: 16px; }
+.captureFlow input::placeholder { color: var(--muted); opacity: 1; }
+.captureFlow input::file-selector-button { min-height: 44px; margin-right: 12px; padding: 8px 12px; border: 0; border-radius: 8px; background: var(--raised); color: var(--text); cursor: pointer; }
+.captureFlow input[aria-invalid="true"] { border-color: #fca5a5; }
+.captureFlow summary { min-height: 44px; padding: 12px 0; cursor: pointer; color: var(--accent); }
+.captureFlow summary:hover { text-decoration: underline; text-underline-offset: 3px; }
+.photoDetails > div { max-height: 480px; overflow-y: auto; overscroll-behavior: contain; }
+.shell { max-width: 1040px; margin: auto; min-height: 100dvh; padding: 24px 40px 116px; }
+.header { display: flex; align-items: center; min-height: 40px; margin-bottom: 28px; }
+.wordmark { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 16px; font-weight: 600; letter-spacing: -.3px; }
+.wordmark svg { width: 17px; height: 17px; color: var(--accent); }
+.main { outline: none; }
+.pageHeading { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 28px; }
+.date { min-height: 22px; margin-top: 8px !important; font-size: 14px; color: var(--muted); line-height: 1.5; }
+.locationButton { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0 8px 12px; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: 12px; }
+.locationButton > span { min-width: 0; }
+.locationButton strong { display: block; font-size: 14px; font-weight: 500; }
+.locationButton > svg:first-child { color: var(--muted); width: 18px; height: 18px; }
+.locationButton > svg:last-child { margin-left: auto; width: 16px; height: 16px; color: var(--muted); }
+.coordinates { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+.tonightGrid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px 32px; grid-template-areas: "photo weather" "photo discoveries"; align-items: start; }
+.conditions { grid-area: weather; background: var(--surface); padding: 24px; border-radius: 20px; }
+.sectionHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sectionHeading svg { color: var(--accent); }
+.weatherMetrics { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 20px; }
+.weatherMetrics > div { display: flex; flex-direction: column; gap: 4px; }
+.weatherValue { font-size: 32px; font-weight: 550; line-height: 1.15; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+.weatherValue > span { margin-left: 3px; font-size: 18px; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+.metricLabel { font-size: 12px; color: var(--muted); }
+.viewingNote { margin-top: 20px !important; font-size: 14px; line-height: 1.6; }
+.weatherCredit { margin-top: 16px !important; display: flex; flex-wrap: wrap; gap: 4px 8px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.root .weatherCredit a { text-decoration: underline; text-underline-offset: 3px; }
+.weatherCredit a { display: inline-flex; align-items: center; min-height: 44px; margin: -12px 0; }
+.weatherLoading { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; min-height: 150px; }
+.weatherLoading > div { height: 44px; width: 80%; border-radius: 8px; background: var(--raised); }
+.weatherLoading > span { grid-column: 1 / -1; font-size: 14px; color: var(--muted); }
+.weatherError { min-height: 150px; padding-top: 24px; font-size: 14px; line-height: 1.7; }
+.weatherError > p + p { color: var(--muted); }
+.root .textButton { display: inline-flex; align-items: center; border: 0; background: transparent; padding: 8px 0; min-height: 44px; color: var(--accent); text-align: left; }
+.captureCard { grid-area: photo; min-width: 0; }
+.photo { position: relative; height: 304px; overflow: hidden; border-radius: 20px; background: var(--surface); }
+.photo img { object-fit: cover; object-position: 50% 31%; }
+.captureCopy { padding-top: 20px; }
+.captureCopy h2 { font-size: 22px; max-width: 25ch; }
+.captureCopy > p { margin-top: 8px; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.root .primary { background: var(--accent); color: var(--action-text); min-height: 48px; padding: 12px 16px; border: 0; border-radius: 12px; width: 100%; display: inline-flex; justify-content: center; align-items: center; gap: 12px; font-size: 14px; font-weight: 600; transition: transform .12s ease, opacity .12s ease; }
+.captureCopy .primary { margin-top: 20px; }
+.primary svg { width: 19px; height: 19px; }
+.primary svg:last-child { margin-left: auto; width: 16px; height: 16px; }
+.root .primary:hover { opacity: .9; }
+.primary:active { transform: scale(.98); }
+.discoveries { grid-area: discoveries; min-width: 0; }
+.exampleNote { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 8px !important; }
+.discoveryList { margin-top: 12px; }
+.discoveryRow { display: flex; width: 100%; min-height: 68px; align-items: center; gap: 12px; padding: 8px 0; text-align: left; border: 0; background: transparent; color: var(--text); border-radius: 12px; }
+.objectIcon { width: 40px; height: 40px; display: grid; place-items: center; background: var(--surface); border-radius: 12px; color: var(--accent); }
+.discoveryRow > span:nth-child(2) { flex: 1; min-width: 0; }
+.discoveryRow strong { display: block; font-size: 14px; font-weight: 550; }
+.discoveryRow > span:nth-child(2) > span { display: block; color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 4px; }
+.discoveryRow > svg { width: 16px; height: 16px; color: var(--muted); }
+.discoveryRow:hover { background: var(--surface); }
+.photoCredit { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 24px !important; }
+.root .photoCredit a { display: inline-flex; min-height: 44px; align-items: center; text-decoration: underline; text-underline-offset: 3px; }
+.navigation { position: fixed; bottom: 0; left: 0; right: 0; z-index: 10; background: var(--night); padding: 8px max(20px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+.navigationInner { max-width: 420px; margin: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.root .navLink { min-height: 52px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); border-radius: 12px; }
+.root .navLink[aria-current="page"] { color: var(--accent); background: var(--surface); }
+.root .navCapture { background: var(--accent); color: var(--action-text); }
+.root .navCapture[aria-current="page"] { background: var(--accent); color: var(--action-text); }
+.navLink:hover { background: var(--surface); }
+.root .navCapture:hover { background: var(--accent); opacity: .9; }
+.skip { position: fixed; top: -80px; left: 20px; z-index: 30; padding: 12px 16px; min-height: 44px; border-radius: 12px; background: var(--accent); color: var(--action-text) !important; }
+.skip:focus { top: 16px; }
+.sheet { position: fixed; inset: 0; margin: auto; width: min(480px, calc(100% - 32px)); max-height: min(720px, calc(100dvh - 48px)); border: 0; padding: 0; border-radius: 24px; background: var(--surface); color: var(--text); overflow-y: auto; overscroll-behavior: contain; z-index: 20; }
+.sheet::backdrop { background: rgb(0 0 0 / 65%); }
+.sheetContent { position: relative; padding: 32px 24px 24px; }
+.sheetContent > h2 { font-size: 24px; line-height: 1.2; padding-right: 40px; }
+.closeButton { position: absolute; top: 16px; right: 12px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 12px; background: transparent; color: var(--text); }
+.closeButton:hover { background: var(--raised); }
+.sheetDescription { margin-top: 12px !important; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.locationAction { display: flex; justify-content: center; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 12px; margin-top: 24px; background: var(--accent); color: var(--action-text); border: 0; border-radius: 12px; font-size: 14px !important; font-weight: 600 !important; }
+.privacyNote { margin-top: 12px !important; font-size: 12px; color: var(--muted); line-height: 1.6; }
+.cityForm { margin-top: 28px; }
+.cityForm label { display: block; font-size: 14px; margin-bottom: 12px; }
+.cityForm > div { display: flex; align-items: center; gap: 8px; }
+.cityForm input { width: 100%; min-width: 0; min-height: 48px; border: 1px solid #71829a; border-radius: 12px; padding: 12px; background: var(--night); color: var(--text); font-size: 16px; }
+.cityForm input::placeholder { color: var(--muted); opacity: 1; }
+.cityForm button { flex-shrink: 0; width: 48px; height: 48px; display: grid; place-items: center; border: 0; border-radius: 12px; background: var(--raised); color: var(--text); }
+.searchStatus { font-size: 13px; line-height: 1.6; margin-top: 12px; min-height: 21px; }
+.cityResults { list-style: none; margin: 12px 0 0; padding: 0; }
+.cityResults button { display: flex; justify-content: space-between; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 12px 8px; text-align: left; background: transparent; color: var(--text); border: 0; border-radius: 12px; }
+.cityResults button:hover { background: var(--raised); }
+.cityResults strong { display: block; font-size: 14px; font-weight: 500; }
+.cityResults span span { display: block; color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 4px; }
+.searchAttribution { color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 20px !important; }
+.detailIcon { width: 44px; height: 44px; display: grid; place-items: center; color: var(--accent); margin-bottom: 16px; }
+.detailIcon svg { width: 32px; height: 32px; }
+.objectBody { font-size: 16px; line-height: 1.7; margin-top: 20px !important; }
+.localNote { padding: 20px 0 24px; }
+.localNote h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.localNote p { font-size: 14px; line-height: 1.7; color: var(--muted); }
+.emptyCollection { display: flex; min-height: 480px; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 16px; }
+.emptyCollection > svg { width: 44px; height: 44px; color: var(--accent); margin-bottom: 8px; }
+.emptyCollection h2 { font-size: 24px; }
+.emptyCollection > p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.emptyCollection .primary { width: 240px; margin-top: 8px; }
+@media (max-width: 767px) {
+  .shell { max-width: 560px; padding: max(16px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(104px, calc(env(safe-area-inset-bottom) + 92px)) max(20px, env(safe-area-inset-left)); }
+  .header { margin-bottom: 20px; }
+  .pageHeading { align-items: stretch; flex-direction: column; gap: 16px; margin-bottom: 20px; }
+  .locationButton { padding: 0; min-height: 48px; }
+  .locationButton strong { font-size: 14px; }
+  .coordinates { font-size: 12px; }
+  .tonightGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; grid-template-areas: "weather" "photo" "discoveries"; }
+  .conditions { padding: 20px; }
+  .conditions h2 { font-size: 18px; }
+  .weatherMetrics { margin-top: 16px; }
+  .weatherValue { font-size: 30px; }
+  .viewingNote { margin-top: 16px !important; font-size: 13px; }
+  .weatherCredit { margin-top: 12px !important; }
+  .weatherLoading { min-height: 122px; }
+  .photo { height: 220px; }
+  .captureCopy { padding-top: 16px; }
+  .captureCopy h2 { font-size: 21px; max-width: 24ch; }
+  .captureCopy .primary { margin-top: 16px; }
+  .photoCredit { margin-top: 20px !important; }
+  .sheet { inset: auto 0 0; width: 100%; max-width: 560px; max-height: calc(100dvh - 24px); margin: 0 auto; border-radius: 24px 24px 0 0; }
+  .sheetContent { padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+}
+@media (max-width: 359px) {
+  .shell { padding-left: 16px; padding-right: 16px; }
+  .coordinates { font-size: 12px; }
+  .photo { height: 200px; }
+  .conditions { padding: 16px; }
+  .sheetContent { padding-left: 20px; padding-right: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .root a { transition: none; }
+  .primary:active { transform: none; }
+}
+
+.locationButton:hover, .root .textButton:hover { background: var(--surface); }
+.locationAction:hover { opacity: .9; }
+.cityForm button:hover { background: var(--night); }

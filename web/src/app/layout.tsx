@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -13,15 +13,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SkyScore — Photograph space events",
+  title: "Your Sky - Tonight",
   description:
-    "Real-time multiplayer game: photograph ISS passes, launches, and meteor showers to earn points.",
+    "See your local sky conditions, take a photo, and discover something outside.",
 };
+
+export const viewport: Viewport = { themeColor: "#0b0d12", viewportFit: "cover" };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      style={{ colorScheme: "dark", background: "#0b0d12", scrollbarGutter: "stable", scrollPaddingBottom: "100px" }}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
