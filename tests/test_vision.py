@@ -1,4 +1,4 @@
-"""Recorded-response tests for the vision judge. No network."""
+"""Recorded-response unit tests for the vision judge. No network."""
 
 from __future__ import annotations
 
@@ -7,16 +7,20 @@ import os
 import unittest
 from pathlib import Path
 
+import httpx
+
 from sky_photo.astrometry import SolveResult
 from sky_photo.models import Identity
 from sky_photo.pipeline import process_sky_photo
 from sky_photo.vision import (
-    analyze_outcome as analyze,
+    HttpVisionClient,
+    JudgmentOutcome,
+    analyze,
+    analyze_outcome,
     apply_judgment,
     infer_subjects,
     parse_judgment,
 )
-from sky_photo.vision import JudgmentOutcome
 
 FIX = Path(__file__).resolve().parent / "fixtures"
 
@@ -41,12 +45,18 @@ CRITIQUE = {
 
 
 class ScriptedJudge:
+    """VisionClient stand-in that returns canned complete() replies."""
+
     def __init__(self, replies: list[str]) -> None:
         self.replies = list(replies)
         self.calls = 0
+        self.last_system: str | None = None
+        self.last_user_text: str | None = None
 
     def complete(self, *, system: str, user_text: str, image_jpeg: bytes) -> str:
         self.calls += 1
+        self.last_system = system
+        self.last_user_text = user_text
         if not self.replies:
             raise AssertionError("judge called more times than scripted")
         return self.replies.pop(0)
@@ -86,7 +96,9 @@ class TestParseJudgment(unittest.TestCase):
         judgment = parse_judgment(raw)
         self.assertTrue(judgment.is_night_sky)
         self.assertEqual(judgment.rubric.clarity, 8)  # type: ignore[union-attr]
-        self.assertNotIn("score", judgment.model_dump())
+        dumped = judgment.model_dump()
+        self.assertNotIn("score", dumped)
+        self.assertNotIn("rarity", dumped)
 
     def test_daytime_may_omit_rubric(self) -> None:
         judgment = parse_judgment(
@@ -100,18 +112,19 @@ class TestParseJudgment(unittest.TestCase):
             parse_judgment(json.dumps({"is_night_sky": True, "reason": "stars"}))
 
 
-class TestAnalyzeRetry(unittest.TestCase):
+class TestAnalyzeOutcome(unittest.TestCase):
     def test_retries_once_then_accepts(self) -> None:
         judge = ScriptedJudge(["not json", _night_payload()])
-        outcome = analyze(b"jpeg", {"solver": None}, client=judge)
+        outcome = analyze_outcome(b"jpeg", {"solver": None}, client=judge)
         self.assertEqual(judge.calls, 2)
         self.assertEqual(outcome.attempts, 2)
         self.assertFalse(outcome.needs_review)
+        self.assertFalse(outcome.skipped)
         self.assertIsNotNone(outcome.judgment)
 
     def test_second_failure_needs_review(self) -> None:
         judge = ScriptedJudge(["nope", "still nope"])
-        outcome = analyze(b"jpeg", {"solver": None}, client=judge)
+        outcome = analyze_outcome(b"jpeg", {"solver": None}, client=judge)
         self.assertEqual(judge.calls, 2)
         self.assertTrue(outcome.needs_review)
         self.assertIsNone(outcome.judgment)
@@ -133,7 +146,7 @@ class TestAnalyzeRetry(unittest.TestCase):
             for name in ("VISION_API_KEY", "XAI_API_KEY", "VISION_PROVIDER")
         }
         try:
-            outcome = analyze(b"jpeg", {"solver": None})
+            outcome = analyze_outcome(b"jpeg", {"solver": None})
         finally:
             for name, value in saved.items():
                 if value is not None:
@@ -141,11 +154,125 @@ class TestAnalyzeRetry(unittest.TestCase):
         self.assertTrue(outcome.skipped)
         self.assertEqual(outcome.attempts, 0)
         self.assertTrue(outcome.needs_review)
+        self.assertIn("VISION_API_KEY", outcome.error or "")
+
+
+class TestAnalyzeDict(unittest.TestCase):
+    """Public ``analyze(image_bytes, context) -> dict`` adapter."""
+
+    def test_success_dict_includes_needs_review_false(self) -> None:
+        judge = ScriptedJudge([_night_payload()])
+        payload = analyze(b"jpeg", {"solver": None}, client=judge)
+        self.assertFalse(payload["needs_review"])
+        self.assertTrue(payload["is_night_sky"])
+        self.assertEqual(payload["rubric"]["clarity"], 8)
+        self.assertEqual(payload["critique"]["strengths"][0].startswith("Stars"), True)
+        self.assertNotIn("score", payload)
+        self.assertNotIn("rarity", payload)
+
+    def test_invalid_json_dict_marks_needs_review(self) -> None:
+        judge = ScriptedJudge(["{", "{"])
+        payload = analyze(b"jpeg", {"solver": None}, client=judge)
+        self.assertTrue(payload["needs_review"])
+        self.assertIsNone(payload["rubric"])
+        self.assertIsNone(payload["critique"])
+        self.assertEqual(payload["identity_method"], "none")
+
+    def test_accepts_context_json_string(self) -> None:
+        judge = ScriptedJudge([_night_payload()])
+        payload = analyze(b"jpeg", json.dumps({"solver": None}), client=judge)
+        self.assertFalse(payload["needs_review"])
+        self.assertIn("solver", judge.last_user_text or "")
+
+
+class TestHttpVisionClient(unittest.TestCase):
+    """HttpVisionClient against recorded httpx responses (no network)."""
+
+    def test_grok_posts_json_object_temperature_zero(self) -> None:
+        seen: dict[str, object] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["url"] = str(request.url)
+            seen["auth"] = request.headers.get("authorization")
+            body = json.loads(request.content.decode("utf-8"))
+            seen["body"] = body
+            return httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": _night_payload()}},
+                    ]
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        http = httpx.Client(transport=transport)
+        client = HttpVisionClient(
+            provider="grok",
+            api_key="test-key",
+            model="grok-2-vision-1212",
+            base_url="https://api.x.ai/v1",
+            http=http,
+        )
+        try:
+            raw = client.complete(
+                system="sys",
+                user_text="Judge this photo.",
+                image_jpeg=b"fake-jpeg",
+            )
+        finally:
+            http.close()
+
+        self.assertEqual(seen["url"], "https://api.x.ai/v1/chat/completions")
+        self.assertEqual(seen["auth"], "Bearer test-key")
+        body = seen["body"]
+        assert isinstance(body, dict)
+        self.assertEqual(body["temperature"], 0)
+        self.assertEqual(body["response_format"], {"type": "json_object"})
+        judgment = parse_judgment(raw)
+        self.assertTrue(judgment.is_night_sky)
+
+    def test_anthropic_reads_content_blocks(self) -> None:
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.headers.get("x-api-key"), "anth-key")
+            self.assertTrue(str(request.url).endswith("/messages"))
+            body = json.loads(request.content.decode("utf-8"))
+            self.assertEqual(body["temperature"], 0)
+            return httpx.Response(
+                200,
+                json={
+                    "content": [
+                        {"type": "text", "text": _night_payload()},
+                    ]
+                },
+            )
+
+        transport = httpx.MockTransport(handler)
+        http = httpx.Client(transport=transport)
+        client = HttpVisionClient(
+            provider="anthropic",
+            api_key="anth-key",
+            model="claude-sonnet-4-5",
+            base_url="https://api.anthropic.com/v1",
+            http=http,
+        )
+        try:
+            raw = client.complete(
+                system="sys",
+                user_text="Judge this photo.",
+                image_jpeg=b"fake-jpeg",
+            )
+        finally:
+            http.close()
+
+        self.assertTrue(parse_judgment(raw).is_night_sky)
 
 
 class TestApplyJudgment(unittest.TestCase):
     def test_model_estimate_caps_names_and_confidence(self) -> None:
-        outcome = analyze(b"jpeg", {"solver": None}, client=ScriptedJudge([_night_payload()]))
+        outcome = analyze_outcome(
+            b"jpeg", {"solver": None}, client=ScriptedJudge([_night_payload()])
+        )
         applied = apply_judgment(
             solve=None,
             outcome=outcome,
@@ -182,7 +309,9 @@ class TestApplyJudgment(unittest.TestCase):
             brightest_object="Sirius",
             other_objects=["Milky Way", "bright planet, unidentified"],
         )
-        outcome = analyze(b"jpeg", {"solver": {}}, client=ScriptedJudge([payload]))
+        outcome = analyze_outcome(
+            b"jpeg", {"solver": {}}, client=ScriptedJudge([payload])
+        )
         applied = apply_judgment(
             solve=solve,
             outcome=outcome,
@@ -296,3 +425,7 @@ class TestPipelineVision(unittest.TestCase):
         self.assertEqual(judge.calls, 0)
         self.assertEqual(outcome.status_code, 422)
         self.assertFalse(outcome.record.is_night_sky)
+
+
+if __name__ == "__main__":
+    unittest.main()
