@@ -22,7 +22,8 @@
   },
   "dependencies": {
     "@ai-sdk/xai": "^1.2.16",
-    "ai": "^4.3.16"
+    "ai": "^4.3.16",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "typescript": "^5.8.3"

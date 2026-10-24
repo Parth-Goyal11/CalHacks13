@@ -20,6 +20,15 @@ npm run dev            # Next.js at http://localhost:3000
 npm run ingest         # index demo space events into Elasticsearch
 ```
 
+### Night-sky reveal (`/sky`)
+
+1. Open http://localhost:3000/sky
+2. Upload or capture a night-sky photo
+3. Enter location (lat/lon), time taken, optional facing direction
+4. Grok vision returns constellation stick figures overlaid on the image — click a figure for details / “Ask Grok for more”
+
+Requires `XAI_API_KEY` in the root `.env` (SpaceXAI track).
+
 ## Tracks
 
 - **SpaceXAI** — Cursor + Grok Imagine/Voice
