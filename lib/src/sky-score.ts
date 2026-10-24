@@ -4,6 +4,7 @@
  * The vision model never returns score/rarity/points — only this module does.
  */
 
+import type { FigureAlignment } from "./align-figures";
 import type { SkyAnalysis, SkyCaptureMeta, SkyFigure } from "./sky-analysis";
 
 export type RarityName =
@@ -98,6 +99,20 @@ export interface AwardResult {
   cardFoil: string | null;
 }
 
+/** Points earned for one identified figure (constellation / object). */
+export interface FigureAward {
+  figureId: string;
+  figureName: string;
+  kind: string;
+  starsIdentified: number;
+  catalogStars: number;
+  catalogMatched: number;
+  alignmentScore: number | null;
+  points: number;
+  breakdown: string[];
+  missingCatalogStars: string[];
+}
+
 export interface ScoreResult {
   score: number | null;
   subjectBonus: number | null;
@@ -111,6 +126,10 @@ export interface ScoreResult {
   hasExifTime: boolean | null;
   /** Human-readable reasons a cap lowered rarity (empty if none). */
   capNotes: string[];
+  /** Per-constellation / object find points. */
+  figureAwards: FigureAward[];
+  /** Sum of figureAwards.points. */
+  figurePointsTotal: number;
   /** Rubric ints used for the weighted quality score (0–10). */
   rubric: {
     clarity: number;
@@ -228,6 +247,8 @@ export function scorePhoto(opts: {
       identityMethod: null,
       hasExifTime: null,
       capNotes: [],
+      figureAwards: [],
+      figurePointsTotal: 0,
       rubric: null,
     };
   }
@@ -283,7 +304,70 @@ export function scorePhoto(opts: {
     identityMethod,
     hasExifTime,
     capNotes,
+    figureAwards: [],
+    figurePointsTotal: 0,
     rubric,
+  };
+}
+
+/** Points for one figure from stars found + catalog alignment quality. */
+export function awardForFigure(
+  figure: SkyFigure,
+  alignment?: FigureAlignment
+): FigureAward {
+  const breakdown: string[] = [];
+  let points = 0;
+  const kind = figure.kind;
+  const starsIdentified = figure.stars.length;
+  const catalogStars = alignment?.catalogStars ?? 0;
+  const catalogMatched = alignment?.matchedStars ?? 0;
+  const alignmentScore = alignment?.alignmentScore ?? null;
+
+  if (kind === "constellation" || kind === "asterism") {
+    points += 5;
+    breakdown.push("base constellation/asterism +5");
+    const starPts = Math.min(14, starsIdentified * 2);
+    points += starPts;
+    breakdown.push(`${starsIdentified} stars marked +${starPts}`);
+    if (catalogMatched > 0) {
+      const matchPts = Math.min(10, catalogMatched * 2);
+      points += matchPts;
+      breakdown.push(
+        `${catalogMatched}/${catalogStars || "?"} catalog matches +${matchPts}`
+      );
+    }
+    if (alignmentScore != null) {
+      const alignPts = Math.round(alignmentScore * 10);
+      points += alignPts;
+      breakdown.push(
+        `alignment ${(alignmentScore * 100).toFixed(0)}% +${alignPts}`
+      );
+    }
+  } else if (kind === "planet" || kind === "moon") {
+    points += 8;
+    breakdown.push(`${kind} +8`);
+  } else if (kind === "galaxy" || kind === "meteor") {
+    points += 12;
+    breakdown.push(`${kind} +12`);
+  } else if (kind === "star") {
+    points += 3 + Math.min(4, Math.max(0, starsIdentified - 1) * 2);
+    breakdown.push(`named star field +${points}`);
+  } else {
+    points += 2;
+    breakdown.push("other object +2");
+  }
+
+  return {
+    figureId: figure.id,
+    figureName: figure.name,
+    kind,
+    starsIdentified,
+    catalogStars,
+    catalogMatched,
+    alignmentScore,
+    points,
+    breakdown,
+    missingCatalogStars: alignment?.missingCatalogStars ?? [],
   };
 }
 
@@ -405,7 +489,10 @@ export function rubricFromAnalysis(analysis: SkyAnalysis): {
 export function scoreSkyAnalysis(
   analysis: SkyAnalysis,
   meta: SkyCaptureMeta,
-  opts?: { identityMethod?: IdentityMethod }
+  opts?: {
+    identityMethod?: IdentityMethod;
+    alignments?: FigureAlignment[];
+  }
 ): ScoreResult {
   const figs = realFigures(analysis);
   const isNightSky = figs.length > 0;
@@ -416,7 +503,7 @@ export function scoreSkyAnalysis(
       ?.name.toLowerCase()
       .replace(/\s+/g, "-") ?? null;
 
-  return scorePhoto({
+  const result = scorePhoto({
     isNightSky,
     ...rubric,
     subjects,
@@ -424,4 +511,16 @@ export function scoreSkyAnalysis(
     hasExifTime: Boolean(meta.takenAt),
     cardFoil: foil,
   });
+
+  const byId = new Map(
+    (opts?.alignments ?? []).map((a) => [a.figureId, a] as const)
+  );
+  const figureAwards = figs.map((f) => awardForFigure(f, byId.get(f.id)));
+  const figurePointsTotal = figureAwards.reduce((a, f) => a + f.points, 0);
+
+  return {
+    ...result,
+    figureAwards,
+    figurePointsTotal,
+  };
 }

@@ -24,6 +24,7 @@ export {
   SUBJECT_BONUS,
   applyCaps,
   awardFor,
+  awardForFigure,
   inferSubjectsFromAnalysis,
   rubricFromAnalysis,
   scorePhoto,
@@ -34,6 +35,7 @@ export {
 } from "./sky-score";
 export type {
   AwardResult,
+  FigureAward,
   IdentityMethod,
   RarityName,
   ScoreResult,
@@ -50,3 +52,18 @@ export type {
   SkyLocationContext,
   VisibleSkyHint,
 } from "./sky-context";
+
+export {
+  CONSTELLATION_PATTERNS,
+  catalogPromptBlock,
+  findConstellationPattern,
+  normalizeStarName,
+} from "./star-catalog";
+export type {
+  CatalogLine,
+  CatalogStar,
+  ConstellationPattern,
+} from "./star-catalog";
+
+export { alignAnalysisToCatalog } from "./align-figures";
+export type { AlignResult, FigureAlignment } from "./align-figures";

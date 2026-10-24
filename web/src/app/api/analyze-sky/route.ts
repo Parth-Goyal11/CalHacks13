@@ -38,9 +38,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const raw = body.imageBase64.includes(",")
+      ? body.imageBase64.slice(body.imageBase64.indexOf(",") + 1)
+      : body.imageBase64;
+    if (raw.length < 500) {
+      return Response.json(
+        { error: "imageBase64 looks empty or too small — re-upload the photo." },
+        { status: 400 }
+      );
+    }
+
+    console.log(
+      `[analyze-sky] imageBytes≈${Math.round((raw.length * 3) / 4)} mime=${body.mimeType ?? "image/jpeg"} → Grok`
+    );
+
     const { analysis, score } = await analyzeNightSky({
-      imageBase64: body.imageBase64,
-      mimeType: body.mimeType,
+      imageBase64: raw,
+      mimeType: body.mimeType ?? "image/jpeg",
       meta: body.meta,
     });
 

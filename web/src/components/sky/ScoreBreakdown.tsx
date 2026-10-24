@@ -109,6 +109,60 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
         </li>
       </ol>
 
+      {(score.figureAwards?.length ?? 0) > 0 ? (
+        <div>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">
+              Points by constellation / object
+            </p>
+            <p className="text-xs text-sky-300/90">
+              identification total +{score.figurePointsTotal ?? 0}
+            </p>
+          </div>
+          <ul className="mt-2 divide-y divide-zinc-900 overflow-hidden rounded border border-zinc-800">
+            {[...(score.figureAwards ?? [])]
+              .sort((a, b) => b.points - a.points)
+              .map((fig) => (
+                <li
+                  key={fig.figureId}
+                  className="flex flex-col gap-1 bg-zinc-950/60 px-3 py-2.5 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm text-zinc-100">
+                      {fig.figureName}
+                      <span className="ml-2 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        {fig.kind}
+                      </span>
+                    </p>
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      {fig.starsIdentified} stars
+                      {fig.catalogStars > 0
+                        ? ` · ${fig.catalogMatched}/${fig.catalogStars} catalog`
+                        : ""}
+                      {fig.alignmentScore != null
+                        ? ` · align ${(fig.alignmentScore * 100).toFixed(0)}%`
+                        : ""}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-zinc-600">
+                      {fig.breakdown.join(" · ")}
+                    </p>
+                    {fig.missingCatalogStars.length > 0 ? (
+                      <p className="mt-1 text-[11px] text-amber-200/70">
+                        Still missing:{" "}
+                        {fig.missingCatalogStars.slice(0, 5).join(", ")}
+                        {fig.missingCatalogStars.length > 5 ? "…" : ""}
+                      </p>
+                    ) : null}
+                  </div>
+                  <p className="shrink-0 text-lg font-semibold tabular-nums text-sky-300">
+                    +{fig.points}
+                  </p>
+                </li>
+              ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div>
         <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">
           Rubric (0–10)

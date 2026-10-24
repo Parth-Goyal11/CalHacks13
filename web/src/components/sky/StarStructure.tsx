@@ -120,8 +120,8 @@ export function StarStructure({
         </p>
         <p className="mt-1 text-sm text-zinc-400">
           {allStars.length} named point{allStars.length === 1 ? "" : "s"} across{" "}
-          {realFigures.length} figure{realFigures.length === 1 ? "" : "s"} — stick
-          figures use classic constellation lines.
+          {realFigures.length} figure{realFigures.length === 1 ? "" : "s"} — lines
+          verified against the stick-figure alignment catalog when geometry fits.
         </p>
       </div>
 
