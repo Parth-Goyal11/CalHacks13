@@ -208,7 +208,6 @@ class TestHttpVisionClient(unittest.TestCase):
         transport = httpx.MockTransport(handler)
         http = httpx.Client(transport=transport)
         client = HttpVisionClient(
-            provider="grok",
             api_key="test-key",
             model="grok-2-vision-1212",
             base_url="https://api.x.ai/v1",
@@ -232,40 +231,15 @@ class TestHttpVisionClient(unittest.TestCase):
         judgment = parse_judgment(raw)
         self.assertTrue(judgment.is_night_sky)
 
-    def test_anthropic_reads_content_blocks(self) -> None:
-        def handler(request: httpx.Request) -> httpx.Response:
-            self.assertEqual(request.headers.get("x-api-key"), "anth-key")
-            self.assertTrue(str(request.url).endswith("/messages"))
-            body = json.loads(request.content.decode("utf-8"))
-            self.assertEqual(body["temperature"], 0)
-            return httpx.Response(
-                200,
-                json={
-                    "content": [
-                        {"type": "text", "text": _night_payload()},
-                    ]
-                },
+    def test_rejects_non_grok_provider(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            HttpVisionClient(
+                provider="anthropic",
+                api_key="x",
+                model="m",
+                base_url="https://api.x.ai/v1",
             )
-
-        transport = httpx.MockTransport(handler)
-        http = httpx.Client(transport=transport)
-        client = HttpVisionClient(
-            provider="anthropic",
-            api_key="anth-key",
-            model="claude-sonnet-4-5",
-            base_url="https://api.anthropic.com/v1",
-            http=http,
-        )
-        try:
-            raw = client.complete(
-                system="sys",
-                user_text="Judge this photo.",
-                image_jpeg=b"fake-jpeg",
-            )
-        finally:
-            http.close()
-
-        self.assertTrue(parse_judgment(raw).is_night_sky)
+        self.assertIn("Grok only", str(ctx.exception))
 
 
 class TestApplyJudgment(unittest.TestCase):

@@ -17,7 +17,7 @@ app = FastAPI(
     version="0.3.0",
     description=(
         "Phase 3: ingest, OpenCV metrics, Astrometry.net solve, annotated overlay, "
-        "vision judge (Grok|Anthropic), and deterministic scoring."
+        "vision judge (xAI Grok), and deterministic scoring."
     ),
 )
 

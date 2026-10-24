@@ -3,10 +3,9 @@
 The model returns identity text, a 0–10 rubric, and a critique. It never
 returns a score, rarity, or points — ``score.py`` does that.
 
-``VISION_PROVIDER`` is ``grok`` (default) or ``anthropic``.
-``VISION_API_KEY`` (Grok also accepts ``XAI_API_KEY``). Temperature 0, JSON
-only. Invalid JSON is retried once, then the record is marked needs_review
-with rubric left null.
+Vision provider is **xAI Grok only** (SpaceXAI track). ``VISION_API_KEY`` or
+``XAI_API_KEY``. Temperature 0, JSON only. Invalid JSON is retried once, then
+the record is marked needs_review with rubric left null.
 """
 
 from __future__ import annotations
@@ -182,19 +181,23 @@ class AppliedJudgment:
 
 
 class HttpVisionClient:
-    """Grok (OpenAI-compatible) or Anthropic messages. No score fields are requested."""
+    """xAI Grok vision via OpenAI-compatible chat completions. No score fields."""
 
     def __init__(
         self,
         *,
-        provider: str,
         api_key: str,
         model: str,
         base_url: str,
         timeout_s: float = 60.0,
         http: httpx.Client | None = None,
+        provider: str = "grok",
     ) -> None:
-        self.provider = provider
+        if provider.lower() not in {"", "grok"}:
+            raise ValueError(
+                f"Unsupported VISION_PROVIDER={provider!r}; Sky Photo uses xAI Grok only"
+            )
+        self.provider = "grok"
         self.api_key = api_key
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -210,91 +213,38 @@ class HttpVisionClient:
         client = self._http or httpx.Client(timeout=self.timeout_s)
         created = self._http is None
         try:
-            if self.provider == "anthropic":
-                return self._anthropic(client, system, user_text, image_jpeg)
-            return self._grok(client, system, user_text, image_jpeg)
+            b64 = base64.b64encode(image_jpeg).decode("ascii")
+            response = client.post(
+                f"{self.base_url}/chat/completions",
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model,
+                    "temperature": 0,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": user_text},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{b64}"
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            )
+            response.raise_for_status()
+            body = response.json()
+            content = body["choices"][0]["message"]["content"]
+            return _content_to_text(content)
         finally:
             if created:
                 client.close()
-
-    def _grok(
-        self,
-        client: httpx.Client,
-        system: str,
-        user_text: str,
-        image_jpeg: bytes,
-    ) -> str:
-        b64 = base64.b64encode(image_jpeg).decode("ascii")
-        response = client.post(
-            f"{self.base_url}/chat/completions",
-            headers={"Authorization": f"Bearer {self.api_key}"},
-            json={
-                "model": self.model,
-                "temperature": 0,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": user_text},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{b64}"
-                                },
-                            },
-                        ],
-                    },
-                ],
-            },
-        )
-        response.raise_for_status()
-        body = response.json()
-        content = body["choices"][0]["message"]["content"]
-        return _content_to_text(content)
-
-    def _anthropic(
-        self,
-        client: httpx.Client,
-        system: str,
-        user_text: str,
-        image_jpeg: bytes,
-    ) -> str:
-        b64 = base64.b64encode(image_jpeg).decode("ascii")
-        response = client.post(
-            f"{self.base_url}/messages",
-            headers={
-                "x-api-key": self.api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": self.model,
-                "max_tokens": 1024,
-                "temperature": 0,
-                "system": system,
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "image",
-                                "source": {
-                                    "type": "base64",
-                                    "media_type": "image/jpeg",
-                                    "data": b64,
-                                },
-                            },
-                            {"type": "text", "text": user_text},
-                        ],
-                    }
-                ],
-            },
-        )
-        response.raise_for_status()
-        body = response.json()
-        return _content_to_text(body.get("content"))
 
 
 def _content_to_text(content: Any) -> str:
@@ -318,23 +268,18 @@ def _env(name: str) -> str:
 
 
 def client_from_env() -> HttpVisionClient | None:
-    """Build a client, or None when no API key is configured."""
+    """Build a Grok client, or None when no API key is configured."""
     provider = (_env("VISION_PROVIDER") or "grok").lower()
-    if provider not in {"grok", "anthropic"}:
-        provider = "grok"
-    api_key = _env("VISION_API_KEY")
-    if provider == "grok" and not api_key:
-        api_key = _env("XAI_API_KEY")
+    if provider and provider != "grok":
+        raise ValueError(
+            f"Unsupported VISION_PROVIDER={provider!r}; Sky Photo uses xAI Grok only"
+        )
+    api_key = _env("VISION_API_KEY") or _env("XAI_API_KEY")
     if not api_key:
         return None
-    if provider == "anthropic":
-        model = _env("VISION_MODEL") or "claude-sonnet-4-5"
-        base = _env("VISION_API_BASE") or "https://api.anthropic.com/v1"
-    else:
-        model = _env("VISION_MODEL") or "grok-2-vision-1212"
-        base = _env("VISION_API_BASE") or "https://api.x.ai/v1"
+    model = _env("VISION_MODEL") or "grok-2-vision-1212"
+    base = _env("VISION_API_BASE") or "https://api.x.ai/v1"
     return HttpVisionClient(
-        provider=provider,
         api_key=api_key,
         model=model,
         base_url=base,
@@ -380,7 +325,19 @@ def analyze_outcome(
     used. No key → skipped, needs_review, no network.
     """
     chosen = judge if judge is not None else client
-    active = chosen if chosen is not None else client_from_env()
+    if chosen is not None:
+        active: VisionClient | None = chosen
+    else:
+        try:
+            active = client_from_env()
+        except ValueError as exc:
+            return JudgmentOutcome(
+                judgment=None,
+                needs_review=True,
+                skipped=True,
+                error=str(exc),
+                attempts=0,
+            )
     if active is None:
         return JudgmentOutcome(
             judgment=None,
