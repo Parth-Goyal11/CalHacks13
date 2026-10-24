@@ -17,6 +17,14 @@ export type {
   SkyStar,
 } from "./sky-analysis";
 
+export { verifyAgainstStarDatabase } from "./verify-stars";
+export type {
+  FigureVerdict,
+  StarVerdict,
+  VerificationReport,
+  VerifyResult,
+} from "./verify-stars";
+
 export {
   AWARD_POINTS,
   RARITY_THRESHOLDS,

@@ -8,6 +8,10 @@ interface SkyOverlayProps {
   analysis: SkyAnalysis;
   selectedId: string | null;
   onSelect: (figure: SkyFigure) => void;
+  /** When set, only these star ids are drawn (progressive identify). */
+  revealedStarIds?: ReadonlySet<string> | null;
+  /** Soften the global fade-in when doing one-at-a-time reveal. */
+  progressive?: boolean;
 }
 
 type Point = { id: string; x: number; y: number; brightness: number };
@@ -16,16 +20,27 @@ function easeOut(t: number) {
   return 1 - (1 - t) ** 2.2;
 }
 
-/** Stars for glow; always at least the label anchor (planets, meteors, etc.). */
-function pointsForFigure(figure: SkyFigure): Point[] {
-  if (figure.stars.length > 0) {
-    return figure.stars.map((s: SkyStar) => ({
+function pointsForFigure(
+  figure: SkyFigure,
+  revealed: ReadonlySet<string> | null | undefined
+): Point[] {
+  const stars =
+    revealed && revealed.size >= 0
+      ? figure.stars.filter((s) => revealed.has(s.id))
+      : figure.stars;
+
+  if (stars.length > 0) {
+    return stars.map((s: SkyStar) => ({
       id: s.id,
       x: clamp01(s.x),
       y: clamp01(s.y),
       brightness: s.brightness ?? 0.65,
     }));
   }
+
+  // During progressive reveal, hide figure anchors until a star appears.
+  if (revealed) return [];
+
   return [
     {
       id: `${figure.id}-anchor`,
@@ -46,13 +61,19 @@ export function SkyOverlay({
   analysis,
   selectedId,
   onSelect,
+  revealedStarIds = null,
+  progressive = false,
 }: SkyOverlayProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [reveal, setReveal] = useState(0);
+  const [reveal, setReveal] = useState(progressive ? 1 : 0);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
+    if (progressive) {
+      setReveal(1);
+      return;
+    }
     let raf = 0;
     const start = performance.now();
     const duration = 4000;
@@ -63,7 +84,7 @@ export function SkyOverlay({
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [progressive]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -76,11 +97,16 @@ export function SkyOverlay({
     return () => ro.disconnect();
   }, []);
 
-  const starT = Math.min(1, reveal / 0.55);
-  const lineT = Math.max(0, (reveal - 0.35) / 0.65);
-  const labelT = Math.max(0, (reveal - 0.55) / 0.45);
+  const starT = progressive ? 1 : Math.min(1, reveal / 0.55);
+  const lineT = progressive
+    ? revealedStarIds && revealedStarIds.size > 1
+      ? 1
+      : 0
+    : Math.max(0, (reveal - 0.35) / 0.65);
+  const labelT = progressive
+    ? 1
+    : Math.max(0, (reveal - 0.55) / 0.45);
 
-  // Paint soft illumination + constellation lines onto canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || size.w < 2 || size.h < 2) return;
@@ -94,19 +120,9 @@ export function SkyOverlay({
     for (const figure of analysis.figures) {
       const dim = selectedId !== null && selectedId !== figure.id ? 0.22 : 1;
       const focused = selectedId === null || selectedId === figure.id;
-      const points = pointsForFigure(figure);
+      const points = pointsForFigure(figure, revealedStarIds);
       const starMap = new Map(points.map((p) => [p.id, p]));
-      // Also index original stars for line lookups
-      for (const s of figure.stars) {
-        starMap.set(s.id, {
-          id: s.id,
-          x: clamp01(s.x),
-          y: clamp01(s.y),
-          brightness: s.brightness ?? 0.65,
-        });
-      }
 
-      // --- star blooms (additive light over the photo) ---
       for (const p of points) {
         const px = p.x * size.w;
         const py = p.y * size.h;
@@ -126,17 +142,25 @@ export function SkyOverlay({
         ctx.fill();
       }
 
-      // --- constellation lines ---
       if (lineT <= 0.001) continue;
       ctx.save();
       ctx.globalAlpha = lineT * dim * (focused ? 0.7 : 0.45);
       ctx.strokeStyle = focused
         ? "rgba(210, 225, 255, 0.95)"
         : "rgba(190, 210, 240, 0.85)";
-      ctx.lineWidth = Math.max(1, size.w * (focused && selectedId === figure.id ? 0.0018 : 0.0012));
+      ctx.lineWidth = Math.max(
+        1,
+        size.w * (focused && selectedId === figure.id ? 0.0018 : 0.0012)
+      );
       ctx.lineCap = "round";
 
       for (const line of figure.lines) {
+        if (
+          revealedStarIds &&
+          (!revealedStarIds.has(line.from) || !revealedStarIds.has(line.to))
+        ) {
+          continue;
+        }
         const a = starMap.get(line.from);
         const b = starMap.get(line.to);
         if (!a || !b) continue;
@@ -144,16 +168,14 @@ export function SkyOverlay({
         const y1 = a.y * size.h;
         const x2 = b.x * size.w;
         const y2 = b.y * size.h;
-        const mx = x1 + (x2 - x1) * lineT;
-        const my = y1 + (y2 - y1) * lineT;
         ctx.beginPath();
         ctx.moveTo(x1, y1);
-        ctx.lineTo(mx, my);
+        ctx.lineTo(x2, y2);
         ctx.stroke();
       }
       ctx.restore();
     }
-  }, [analysis, selectedId, size, starT, lineT]);
+  }, [analysis, selectedId, size, starT, lineT, revealedStarIds]);
 
   return (
     <div ref={stageRef} className="sky-stage relative w-full overflow-hidden bg-black">
@@ -175,26 +197,30 @@ export function SkyOverlay({
         aria-hidden
       />
 
-      {/* Labels + hit targets (above canvas so taps work) */}
       <div className="absolute inset-0 z-10">
         {analysis.figures.map((figure) => {
           const dim = selectedId !== null && selectedId !== figure.id;
-          const points = pointsForFigure(figure);
+          const points = pointsForFigure(figure, revealedStarIds);
+          if (points.length === 0) return null;
           const lx = clamp01(figure.labelX) * 100;
           const ly = clamp01(figure.labelY) * 100;
+          const showLabel =
+            !revealedStarIds ||
+            figure.stars.some((s) => revealedStarIds.has(s.id));
 
           return (
             <div key={figure.id}>
               {points.map((p) => {
                 const starName =
                   figure.stars.find((s) => s.id === p.id)?.name ?? null;
-                const showStarLabel =
-                  selectedId === figure.id && starName && figure.stars.length > 1;
+                const showStarLabel = Boolean(starName);
                 return (
                   <div key={`${figure.id}-${p.id}`}>
                     <button
                       type="button"
-                      aria-label={starName ? `${starName} in ${figure.name}` : figure.name}
+                      aria-label={
+                        starName ? `${starName} in ${figure.name}` : figure.name
+                      }
                       className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer rounded-full border-0 bg-transparent"
                       style={{
                         left: `${p.x * 100}%`,
@@ -211,7 +237,7 @@ export function SkyOverlay({
                           left: `${p.x * 100}%`,
                           top: `${p.y * 100}%`,
                           marginTop: 14,
-                          opacity: labelT * (dim ? 0.25 : 0.85),
+                          opacity: labelT * (dim ? 0.25 : 0.9),
                           textShadow:
                             "0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.9)",
                         }}
@@ -223,36 +249,35 @@ export function SkyOverlay({
                 );
               })}
 
-              <button
-                type="button"
-                onClick={() => onSelect(figure)}
-                className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer border-0 bg-transparent px-1.5 py-0.5 text-left"
-                style={{
-                  left: `${lx}%`,
-                  top: `${ly}%`,
-                  opacity: labelT * (dim ? 0.35 : 0.92),
-                  transform: `translate(-50%, -50%) translateY(${(1 - labelT) * 6}px)`,
-                }}
-              >
-                <span
-                  className="block whitespace-nowrap text-[11px] font-medium tracking-wide sm:text-xs"
+              {showLabel ? (
+                <button
+                  type="button"
+                  onClick={() => onSelect(figure)}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer border-0 bg-transparent px-1.5 py-0.5 text-left"
                   style={{
-                    color: "rgba(230, 238, 255, 0.92)",
-                    textShadow:
-                      "0 0 12px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.85), 0 0 24px rgba(140,180,255,0.35)",
+                    left: `${lx}%`,
+                    top: `${ly}%`,
+                    opacity: labelT * (dim ? 0.35 : 0.92),
                   }}
                 >
-                  {figure.name}
-                </span>
-                <span
-                  className="mt-0.5 block text-[9px] uppercase tracking-[0.14em] text-sky-200/70"
-                  style={{
-                    textShadow: "0 1px 2px rgba(0,0,0,0.8)",
-                  }}
-                >
-                  {figure.kind.replace("_", " ")}
-                </span>
-              </button>
+                  <span
+                    className="block whitespace-nowrap text-[11px] font-medium tracking-wide sm:text-xs"
+                    style={{
+                      color: "rgba(230, 238, 255, 0.92)",
+                      textShadow:
+                        "0 0 12px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.85), 0 0 24px rgba(140,180,255,0.35)",
+                    }}
+                  >
+                    {figure.name}
+                  </span>
+                  <span
+                    className="mt-0.5 block text-[9px] uppercase tracking-[0.14em] text-sky-200/70"
+                    style={{ textShadow: "0 1px 2px rgba(0,0,0,0.8)" }}
+                  >
+                    {figure.kind.replace("_", " ")}
+                  </span>
+                </button>
+              ) : null}
             </div>
           );
         })}

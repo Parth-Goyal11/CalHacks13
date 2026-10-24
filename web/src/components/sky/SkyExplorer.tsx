@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   ScoreResult,
   SkyAnalysis,
   SkyCaptureMeta,
   SkyFigure,
+  VerificationReport,
 } from "@calhacks13/lib";
 import {
   dataUrlToBase64,
@@ -14,6 +15,7 @@ import {
   toDatetimeLocalValue,
 } from "@/lib/image";
 import { FigurePanel } from "./FigurePanel";
+import { IdentificationFeed } from "./IdentificationFeed";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SkyOverlay } from "./SkyOverlay";
 import { StarStructure } from "./StarStructure";
@@ -27,6 +29,11 @@ export function SkyExplorer() {
   const [mimeType, setMimeType] = useState("image/jpeg");
   const [analysis, setAnalysis] = useState<SkyAnalysis | null>(null);
   const [score, setScore] = useState<ScoreResult | null>(null);
+  const [verification, setVerification] = useState<VerificationReport | null>(
+    null
+  );
+  const [revealedCount, setRevealedCount] = useState(0);
+  const [revealing, setRevealing] = useState(false);
   const [selected, setSelected] = useState<SkyFigure | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -50,6 +57,34 @@ export function SkyExplorer() {
       streamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
+
+  // Reveal verified stars one at a time after the catalog match test.
+  useEffect(() => {
+    if (!revealing || !verification) return;
+    const total = verification.acceptedStars.length;
+    if (total === 0) {
+      setRevealing(false);
+      return;
+    }
+    if (revealedCount >= total) {
+      setRevealing(false);
+      return;
+    }
+    const delay = revealedCount === 0 ? 400 : 550;
+    const t = window.setTimeout(() => {
+      setRevealedCount((c) => c + 1);
+    }, delay);
+    return () => window.clearTimeout(t);
+  }, [revealing, revealedCount, verification]);
+
+  const revealedStarIds = useMemo(() => {
+    if (!verification) return null;
+    const ids = new Set<string>();
+    for (const s of verification.acceptedStars.slice(0, revealedCount)) {
+      ids.add(s.starId);
+    }
+    return ids;
+  }, [verification, revealedCount]);
 
   async function ingestFile(file: File) {
     setError(null);
@@ -177,6 +212,9 @@ export function SkyExplorer() {
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
       setAnalysis(data.analysis as SkyAnalysis);
       setScore((data.score as ScoreResult) ?? null);
+      setVerification((data.verification as VerificationReport) ?? null);
+      setRevealedCount(0);
+      setRevealing(true);
       setSelected(null);
       setStep("result");
     } catch (e) {
@@ -437,6 +475,9 @@ export function SkyExplorer() {
                 setStep("capture");
                 setAnalysis(null);
                 setScore(null);
+                setVerification(null);
+                setRevealedCount(0);
+                setRevealing(false);
                 setSelected(null);
                 setPreviewUrl(null);
                 setDataUrl(null);
@@ -447,31 +488,46 @@ export function SkyExplorer() {
             </button>
           </div>
 
-          {score ? <ScoreBreakdown score={score} /> : null}
+          {verification ? (
+            <IdentificationFeed
+              verification={verification}
+              revealedCount={revealedCount}
+              revealing={revealing}
+            />
+          ) : null}
 
           <div className="overflow-hidden rounded-lg border border-zinc-800">
             <SkyOverlay
-              key={analysis.headline + analysis.figures.map((f) => f.id).join("-")}
+              key={
+                analysis.headline +
+                analysis.figures.map((f) => f.id).join("-")
+              }
               imageUrl={previewUrl}
               analysis={analysis}
               selectedId={selected?.id ?? null}
               onSelect={setSelected}
+              revealedStarIds={revealedStarIds}
+              progressive
             />
           </div>
 
-          <StarStructure
-            analysis={analysis}
-            selected={selected}
-            onSelect={setSelected}
-          />
+          {!revealing && score ? <ScoreBreakdown score={score} /> : null}
+
+          {!revealing ? (
+            <StarStructure
+              analysis={analysis}
+              selected={selected}
+              onSelect={setSelected}
+            />
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
             <div className="flex flex-col gap-3">
               {!selected ? (
                 <p className="text-sm text-zinc-500">
-                  Watch the sky brighten — then faint lines appear. Tap a lit
-                  star or a chip below for details; selected figures show named
-                  star labels on the photo.
+                  {revealing
+                    ? "Verified stars appear one at a time after the configuration match test."
+                    : "Tap a lit star or a chip below for details."}
                 </p>
               ) : null}
               <ul className="flex flex-wrap gap-2">

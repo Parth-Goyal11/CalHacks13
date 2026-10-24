@@ -5,6 +5,10 @@ import { createGrokClient } from "./grok";
 import { buildSkyLocationContext } from "./sky-context";
 import { catalogPromptBlock } from "./star-catalog";
 import { scoreSkyAnalysis, type ScoreResult } from "./sky-score";
+import {
+  verifyAgainstStarDatabase,
+  type VerificationReport,
+} from "./verify-stars";
 
 /** Normalized image coords: (0,0) top-left → (1,1) bottom-right. */
 export const skyStarSchema = z.object({
@@ -240,6 +244,8 @@ export interface SkyAnalysisWithScore {
   analysis: SkyAnalysis;
   /** Coded score / rarity / award points (never returned by the model). */
   score: ScoreResult;
+  /** Catalog configuration match test — runs before score/UI generation. */
+  verification: VerificationReport;
 }
 
 /**
@@ -289,12 +295,17 @@ export async function analyzeNightSky(options: {
   if (!Array.isArray(raw.figures)) raw.figures = [];
   const parsed = skyAnalysisSchema.parse(raw);
   const sanitized = sanitize(parsed);
-  const { analysis, alignments } = alignAnalysisToCatalog(sanitized);
+  // 1) soft align names/lines → 2) hard catalog match test → 3) score only survivors
+  const { analysis: aligned, alignments } = alignAnalysisToCatalog(sanitized);
+  const { analysis, verification } = verifyAgainstStarDatabase(
+    aligned,
+    alignments
+  );
   const score = scoreSkyAnalysis(analysis, options.meta, { alignments });
   console.log(
-    `[sky-analysis] figures=${analysis.figures.length} aligned=${alignments.filter((a) => a.linesCorrected).length} figurePts=${score.figurePointsTotal}`
+    `[sky-analysis] verified=${verification.acceptedStars.length} rejected=${verification.rejectedStars.length} figures=${analysis.figures.length} figurePts=${score.figurePointsTotal}`
   );
-  return { analysis, score };
+  return { analysis, score, verification };
 }
 
 /** Deeper Grok narration when the user taps a figure. */
