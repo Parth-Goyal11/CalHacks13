@@ -161,7 +161,7 @@ export function SkyExplorer() {
       250
     );
     const controller = new AbortController();
-    const abortTimer = setTimeout(() => controller.abort(), 75_000);
+    const abortTimer = setTimeout(() => controller.abort(), 95_000);
     try {
       const res = await fetch("/api/analyze-sky", {
         method: "POST",
@@ -181,7 +181,7 @@ export function SkyExplorer() {
       setStep("result");
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") {
-        setError("Request timed out (~75s). Retry, or check the terminal for API errors.");
+        setError("Request timed out (~95s). Retry, or check the terminal for API errors.");
       } else {
         setError(e instanceof Error ? e.message : "Analysis failed");
       }

@@ -71,27 +71,27 @@ export const VISION_MODEL: string =
   (typeof process !== "undefined" && process.env.SKY_VISION_MODEL) ||
   "grok-4.20-0309-non-reasoning";
 
-const ANALYSIS_TIMEOUT_MS = 70_000;
-const MIN_CONFIDENCE = 0.4;
+const ANALYSIS_TIMEOUT_MS = 90_000;
+const MIN_CONFIDENCE = 0.35;
 
 function buildPrompt(meta: SkyCaptureMeta): string {
   const sky = buildSkyLocationContext(meta);
   const alignDb = catalogPromptBlock(sky.visible.map((v) => v.name));
 
-  return `Night-sky photo identification for OrbitQuest. The image may be contrast-stretched so fainter stars are visible — mark them too.
+  return `Deep night-sky scan for OrbitQuest. Use the natural photo as-is (no assumed filters). Do a thorough pass — not a quick skim.
 
 ${sky.promptBlock}
 
 ${alignDb}
 
-RULES:
-1. Mark every star/planet you can SEE as a pixel, including fainter ones (roughly mag ≤ 3.5). Put x,y on those pixels (0=left/top, 1=right/bottom). Set brightness 0–1 from how bright it looks.
-2. LOCATION + ALIGNMENT DB are PRIMARY FOR NAMING: when a pattern matches, use the catalog star names and classic lines exactly. Include ALL catalog stars that are visible — not just the brightest 3.
-3. Still photo-grounded: do NOT invent stars that are not points in the image. If a prior figure is not recognizable, omit it.
-4. Prefer 3–8 figures when the sky is rich. Include lone bright stars/planets as kind "star"/"planet".
-5. Constellation/asterism: ≥3 visible stars + classic lines[] between listed star ids (use alignment DB topology).
-6. Star ids should be stable short slugs (e.g. "betelgeuse"); names are classic proper names.
-7. confidence < 0.4 → omit. Short text. overview must mention location/time guidance.
+DEEP SCAN RULES:
+1. First pass: mark the brightest stars/planets. Second pass: re-scan each constellation region for fainter companions (roughly mag ≤ 4) that complete the stick figure.
+2. Put x,y on real pixels only (0=left/top, 1=right/bottom). brightness 0–1 from how bright it looks in THIS photo.
+3. LOCATION + ALIGNMENT DB name what you see: use catalog star names and classic lines. Include ALL catalog stars that are actually visible — never stop at 3 if more are in frame.
+4. Do NOT invent stars that are not points in the image. If a prior figure is not recognizable, omit it.
+5. Prefer a complete sky census: 4–10 figures when rich. Also list lone bright stars/planets as kind "star"/"planet".
+6. Constellation/asterism: ≥3 visible stars + classic lines[] (alignment DB topology). Star ids = short slugs; names = classic proper names.
+7. confidence < 0.35 → omit. overview must say how location/time guided the IDs and note any catalog stars still too faint to mark.
 
 Return ONLY JSON (no fences):
 {
@@ -267,7 +267,7 @@ export async function analyzeNightSky(options: {
   const result = await withTimeout(
     generateText({
       model,
-      maxTokens: 3200,
+      maxTokens: 4500,
       messages: [
         {
           role: "user",

@@ -469,7 +469,7 @@ export function catalogPromptBlock(names: string[]): string {
       .join(", ");
     const links = p.lines.map((l) => `${l.from}–${l.to}`).join(", ");
     blocks.push(
-      `${p.name}: stars [${starList}]; classic lines [${links}]. Mark EVERY listed star that is visible, including fainter ones (mag ≲ 3.5).`
+      `${p.name}: stars [${starList}]; classic lines [${links}]. Deep scan: mark EVERY listed star that is a real point in the photo, including fainter ones (mag ≲ 4).`
     );
   }
   if (blocks.length === 0) return "";
