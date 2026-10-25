@@ -1,28 +1,19 @@
-"use client";
+import Image from "next/image";
+import styles from "./LoadingScreen.module.css";
 
-import { SkyIcon } from "./SkyIcon";
-
-export default function LoadingScreen({ onCancel }: { onCancel?: () => void }) {
+export default function LoadingScreen() {
   return (
-    <div className="loading-screen">
-      {onCancel && (
-        <button
-          className="loading-cancel icon-button"
-          type="button"
-          aria-label="Cancel analysis"
-          onClick={onCancel}
-        >
-          <SkyIcon name="close" />
-        </button>
-      )}
-      <div className="loading-center" role="status" aria-live="polite">
-        <span className="loading-mark">
-          <SkyIcon name="spark" size={20} />
-        </span>
-        <p>Reading your sky</p>
-        <span className="loading-line" aria-hidden="true">
-          <i />
-        </span>
+    <div className={styles.screen} role="status" aria-label="Loading Yonder">
+      <div className={styles.brand} aria-hidden="true">
+        <Image
+          src="/yonder-logo.jpg"
+          alt=""
+          width={80}
+          height={80}
+          priority
+          className={styles.logo}
+        />
+        <p className={styles.name}>Yonder</p>
       </div>
     </div>
   );

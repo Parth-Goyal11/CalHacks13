@@ -143,12 +143,12 @@ export default function Discovery({
         </div>
         <button
           type="button"
-          className={`icon-button ${saved ? "is-active" : ""}`}
+          className={`icon-button ${saved || photo.curated ? "is-active" : ""}`}
           aria-label={
-            saved ? "Remove photo from Memories" : "Save photo to Memories"
+            photo.curated ? "Included in Memories" : saved ? "Remove photo from Memories" : "Save photo to Memories"
           }
-          aria-pressed={saved}
-          disabled={saving}
+          aria-pressed={saved || Boolean(photo.curated)}
+          disabled={saving || photo.curated}
           onClick={onSave}
         >
           <SkyIcon name="bookmark" />
@@ -216,6 +216,19 @@ export default function Discovery({
         </div>
       )}
 
+      {photo.curated && photo.overview && !selected && (
+        <details className="curated-photo-notes" open>
+          <summary>{photo.objects.length} highlights · Photo notes</summary>
+          <p>{photo.overview}</p>
+          <div className="curated-highlight-list">
+            {photo.objects.map((object) => (
+              <button type="button" key={object.id} onClick={() => selectObject(object)}>
+                <SkyIcon name="spark" size={15} /> {object.name}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
       {result?.reveal && !selected && (
         <button className="discovery-details-toggle" type="button" aria-expanded={analysisOpen} aria-controls="photo-analysis" onClick={() => setAnalysisOpen((open) => !open)}>
           <SkyIcon name="spark" size={15} /> {analysisOpen ? "Back to your sky" : photo.objects.length ? "Your discoveries" : "No objects identified"}

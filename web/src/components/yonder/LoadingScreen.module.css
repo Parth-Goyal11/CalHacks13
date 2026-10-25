@@ -1,0 +1,30 @@
+.screen {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  background: #05070d;
+  color: #f3f0e8;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  display: block;
+  border-radius: 18px;
+  object-fit: contain;
+}
+
+.name {
+  margin: 0;
+  font-family: inherit;
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.8px;
+  line-height: 1.2;
+}

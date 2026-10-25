@@ -492,10 +492,19 @@ export default function YonderApp({
         )}
         {sheet === "notifications" && (
           <SimpleSheet title="Notifications" onClose={() => setSheet(null)}>
-            <div className="notification-empty">
-              <SkyIcon name="bell" size={28} />
-              <h3>A quiet night.</h3>
-              <p>No notifications yet.</p>
+            <div className="demo-notifications">
+              <button type="button" onClick={() => { setSheet(null); navigate("memories"); }}>
+                <SkyIcon name="gallery" size={20} />
+                <span><strong>Your sky collection is ready</strong><small>Six skies, each with highlights to explore.</small></span>
+              </button>
+              <button type="button" onClick={() => { setSheet(null); openPhoto(demoSkies[4]); }}>
+                <SkyIcon name="spark" size={20} />
+                <span><strong>A closer look at the night</strong><small>Explore the bright points in your newest sky.</small></span>
+              </button>
+              <button type="button" onClick={() => { setSheet(null); navigate("profile"); }}>
+                <SkyIcon name="bookmark" size={20} />
+                <span><strong>Your featured skies are ready</strong><small>See the skies highlighted on your profile.</small></span>
+              </button>
             </div>
           </SimpleSheet>
         )}
@@ -589,16 +598,17 @@ function HomeScreen({
         <button
           type="button"
           className="notification-button"
-          aria-label="Notifications"
+          aria-label="Notifications, 3 unread"
           onClick={onNotifications}
         >
           <SkyIcon name="bell" size={22} />
+          <span className="notification-count" aria-hidden="true">3</span>
         </button>
       </header>
       <article className="today-post">
         <div className="post-heading">
-          <span className="post-avatar initials">
-            {profile.name.slice(0, 2).toUpperCase()}
+          <span className="post-avatar self-avatar">
+            <img src={IMG.profile} alt={`${profile.name}'s profile photo`} />
           </span>
           <div>
             <strong>My sky tonight</strong>

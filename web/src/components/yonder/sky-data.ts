@@ -45,6 +45,7 @@ export type SkyPhoto = {
   note?: string;
   credit?: string;
   curated?: boolean;
+  overview?: string;
 };
 
 export const IMG = {
@@ -141,13 +142,23 @@ const highlight = (id: string, name: string, x: number, y: number): CelestialObj
 
 export const demoSkies: SkyPhoto[] = [
   { id: "shared-sky-1", image: "/yonder/skies/sky-1.png", title: "A sky full of stars", date: "", location: "", curated: true,
+    overview: "A dense field of stars fills the blue night sky. Explore the crowded central band and a brighter point to its right.",
     objects: [highlight("star-field", "Dense star field", 53, 38), highlight("bright-point", "Bright star", 73, 50)] },
   { id: "shared-sky-2", image: "/yonder/skies/sky-2.png", title: "Above the treetops", date: "", location: "", curated: true,
+    overview: "A three-star line stands above the illuminated treetops, with a brighter isolated star to the left. The foreground gives the sky a sense of scale.",
     objects: [highlight("three-stars", "Three-star line", 48, 51), highlight("bright-star", "Bright star", 12, 56)] },
   { id: "shared-sky-3", image: "/yonder/skies/sky-3.png", title: "Patterns in the dark", date: "", location: "", curated: true,
+    overview: "Several compact star patterns cross this wide sky. A three-star line on the right contrasts with an isolated bright point lower in the frame.",
     objects: [highlight("three-stars", "Three-star line", 80, 57), highlight("bright-star", "Bright star", 49, 77)] },
   { id: "shared-sky-4", image: "/yonder/skies/sky-4.png", title: "A quieter night", date: "", location: "", curated: true,
+    overview: "The darker exposure keeps the background subdued and the brighter stars distinct. Compare the three-star line with the brighter point below it.",
     objects: [highlight("three-stars", "Three-star line", 80, 57), highlight("bright-star", "Bright star", 49, 77)] },
+  { id: "shared-sky-5", image: "/yonder/skies/sky-5.png", title: "Quiet points of light", date: "", location: "", curated: true,
+    overview: "Widely spaced points stand out against a dark, softly textured sky. A tree silhouette at the edge frames the open star field.",
+    objects: [highlight("upper-point", "Upper bright point", 59, 42), highlight("lower-point", "Lower bright point", 90, 79)] },
+  { id: "shared-sky-6", image: "/yonder/skies/sky-6.png", title: "Between the trees", date: "", location: "", curated: true,
+    overview: "Tree silhouettes form a low horizon beneath a sparse field of stars. Look for the bright pair in the upper half and compare their spacing.",
+    objects: [highlight("left-point", "Left bright point", 45, 43), highlight("right-point", "Right bright point", 84, 31)] },
 ];
 
 export const friendPosts = [

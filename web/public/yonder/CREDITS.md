@@ -12,4 +12,4 @@ Imported without visual substitution from the user's Figma Make prototype.
 
 The four `people/` demo profile photographs were supplied by the user for the sample home feed.
 
-The four `skies/` photographs and Jason Liu profile photograph were supplied by the user for this demo. Sky photo locations are intentionally omitted. Highlight labels describe visible features and are not plate-solved catalog identifications.
+The six `skies/` photographs and Jason Liu profile photograph were supplied by the user for this demo. Sky photo locations are intentionally omitted. Highlight labels describe visible features and are not plate-solved catalog identifications.
