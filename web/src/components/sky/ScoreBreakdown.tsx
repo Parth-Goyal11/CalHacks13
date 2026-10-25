@@ -57,9 +57,10 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
             How points formed
           </p>
           <p className="mt-1 text-2xl font-semibold text-zinc-50">
-            {score.finalScore}
+            +{score.award.points}
             <span className="ml-2 text-sm font-normal text-zinc-500">
-              final · {score.rarity} · +{score.award.points} pts
+              from {score.highlights?.length || "the"} highlighted feature
+              {(score.highlights?.length ?? 0) === 1 ? "" : "s"} · {score.rarity}
             </span>
           </p>
         </div>
@@ -104,23 +105,57 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
             +{score.award.points}
           </p>
           <p className="mt-0.5 text-xs text-zinc-500">
-            from rarity table · badge “{score.award.badge}”
+            sum of highlighted features · badge “{score.award.badge}”
           </p>
         </li>
       </ol>
 
-      {(score.figureAwards?.length ?? 0) > 0 ? (
+      {(score.highlights?.length ?? 0) > 0 ? (
+        <div>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-xs uppercase tracking-[0.14em] text-amber-200/80">
+              Scored features
+            </p>
+            <p className="text-xs text-amber-200/90">
+              +{score.figurePointsTotal ?? 0} pts
+            </p>
+          </div>
+          <ol className="mt-2 grid gap-2">
+            {score.highlights.map((feature) => (
+              <li
+                key={feature.figureId}
+                className="flex items-start justify-between gap-3 rounded border border-amber-500/30 bg-amber-500/10 px-3 py-2"
+              >
+                <div>
+                  <p className="text-sm text-amber-50">
+                    <span className="mr-2 text-amber-300/80">#{feature.rank}</span>
+                    {feature.figureName}
+                    <span className="ml-2 text-[10px] uppercase tracking-[0.12em] text-amber-200/60">
+                      {feature.kind}
+                    </span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-100/60">{feature.reason}</p>
+                </div>
+                <p className="shrink-0 text-lg font-semibold tabular-nums text-amber-200">
+                  +{feature.points}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
+
+      {(score.figureAwards ?? []).some((fig) => !fig.highlighted) ? (
         <div>
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-xs uppercase tracking-[0.14em] text-zinc-500">
-              Points by constellation / object
+              Everything else in frame
             </p>
-            <p className="text-xs text-sky-300/90">
-              identification total +{score.figurePointsTotal ?? 0}
-            </p>
+            <p className="text-xs text-zinc-600">not added to the score</p>
           </div>
           <ul className="mt-2 divide-y divide-zinc-900 overflow-hidden rounded border border-zinc-800">
-            {[...(score.figureAwards ?? [])]
+            {(score.figureAwards ?? [])
+              .filter((fig) => !fig.highlighted)
               .sort((a, b) => b.points - a.points)
               .map((fig) => (
                 <li
@@ -154,8 +189,8 @@ export function ScoreBreakdown({ score }: ScoreBreakdownProps) {
                       </p>
                     ) : null}
                   </div>
-                  <p className="shrink-0 text-lg font-semibold tabular-nums text-sky-300">
-                    +{fig.points}
+                  <p className="shrink-0 text-xs uppercase tracking-[0.12em] text-zinc-600">
+                    not scored
                   </p>
                 </li>
               ))}

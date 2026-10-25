@@ -16,9 +16,14 @@ import {
   localInputToIso,
   toDatetimeLocalValue,
 } from "@/lib/image";
+import type { SceneSketch } from "@/lib/sample-scene";
+import { sampleScene } from "@/lib/sample-scene";
+import { SkyAmbience } from "@/lib/sky-ambience";
 import { AngleFovPanel } from "./AngleFovPanel";
 import { FigurePanel } from "./FigurePanel";
 import { IdentificationFeed } from "./IdentificationFeed";
+import { IdentifyScan } from "./IdentifyScan";
+import { FeatureReveal } from "./FeatureReveal";
 import { ScoreBreakdown } from "./ScoreBreakdown";
 import { SkyOverlay } from "./SkyOverlay";
 import { StarStructure } from "./StarStructure";
@@ -39,10 +44,14 @@ export function SkyExplorer() {
   const [fovCheck, setFovCheck] = useState<FovCrossCheck | null>(null);
   const [revealedCount, setRevealedCount] = useState(0);
   const [revealing, setRevealing] = useState(false);
+  const [awardsSettled, setAwardsSettled] = useState(false);
   const [selected, setSelected] = useState<SkyFigure | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingSeconds, setPendingSeconds] = useState(0);
+  const [sketch, setSketch] = useState<SceneSketch | null>(null);
+  const [muted, setMuted] = useState(false);
+  const ambienceRef = useRef<SkyAmbience | null>(null);
 
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -61,8 +70,23 @@ export function SkyExplorer() {
   useEffect(() => {
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
+      ambienceRef.current?.stop();
     };
   }, []);
+
+  function stopAmbience() {
+    ambienceRef.current?.stop();
+    ambienceRef.current = null;
+    setSketch(null);
+  }
+
+  function toggleMute() {
+    setMuted((current) => {
+      const next = !current;
+      ambienceRef.current?.setMuted(next);
+      return next;
+    });
+  }
 
   // Reveal verified stars one at a time after the catalog match test.
   useEffect(() => {
@@ -200,6 +224,22 @@ export function SkyExplorer() {
     setError(null);
     setPending(true);
     setPendingSeconds(0);
+    setSketch(null);
+    stopAmbience();
+    const ambience = new SkyAmbience();
+    ambienceRef.current = ambience;
+    ambience.arm();
+    ambience.setMuted(muted);
+    let settled = false;
+    let scene: SceneSketch | null = null;
+    const sceneTask = sampleScene(dataUrl)
+      .then((sampled) => {
+        scene = sampled;
+        setSketch(sampled);
+        if (!settled) ambience.playScene(sampled);
+        return sampled;
+      })
+      .catch(() => null);
     const started = Date.now();
     const tick = setInterval(
       () => setPendingSeconds(Math.floor((Date.now() - started) / 1000)),
@@ -220,16 +260,24 @@ export function SkyExplorer() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
-      setAnalysis(data.analysis as SkyAnalysis);
-      setScore((data.score as ScoreResult) ?? null);
+      const analysisResult = data.analysis as SkyAnalysis;
+      const scoreResult = (data.score as ScoreResult) ?? null;
+      settled = true;
+      const sampled = scene ?? (await sceneTask);
+      ambience.playSky(analysisResult, scoreResult, sampled);
+      setAnalysis(analysisResult);
+      setScore(scoreResult);
       setVerification((data.verification as VerificationReport) ?? null);
       setPrediction((data.prediction as FovPrediction) ?? null);
       setFovCheck((data.fovCheck as FovCrossCheck) ?? null);
       setRevealedCount(0);
       setRevealing(true);
+      setAwardsSettled(false);
       setSelected(null);
       setStep("result");
     } catch (e) {
+      settled = true;
+      stopAmbience();
       if (e instanceof DOMException && e.name === "AbortError") {
         setError("Request timed out (~105s). Retry, or check the terminal for API errors.");
       } else {
@@ -345,7 +393,17 @@ export function SkyExplorer() {
         </section>
       ) : null}
 
-      {step === "meta" && previewUrl ? (
+      {step === "meta" && previewUrl && pending ? (
+        <IdentifyScan
+          imageUrl={previewUrl}
+          elapsed={pendingSeconds}
+          sketch={sketch}
+          muted={muted}
+          onToggleMute={toggleMute}
+        />
+      ) : null}
+
+      {step === "meta" && previewUrl && !pending ? (
         <section className="grid gap-8 lg:grid-cols-2">
           <div>
             <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-500">
@@ -360,6 +418,7 @@ export function SkyExplorer() {
             <button
               type="button"
               onClick={() => {
+                stopAmbience();
                 setStep("capture");
                 setPreviewUrl(null);
                 setDataUrl(null);
@@ -496,10 +555,18 @@ export function SkyExplorer() {
                   {analysis.skyConditions}
                 </p>
               ) : null}
+              <button
+                type="button"
+                onClick={toggleMute}
+                className="mt-3 rounded-full border border-zinc-700 px-3 py-1 text-[11px] uppercase tracking-[0.14em] text-zinc-400 hover:text-zinc-100"
+              >
+                {muted ? "Play sky piece" : "Silence the sky piece"}
+              </button>
             </div>
             <button
               type="button"
               onClick={() => {
+                stopAmbience();
                 setStep("capture");
                 setAnalysis(null);
                 setScore(null);
@@ -508,6 +575,7 @@ export function SkyExplorer() {
                 setFovCheck(null);
                 setRevealedCount(0);
                 setRevealing(false);
+                setAwardsSettled(false);
                 setSelected(null);
                 setPreviewUrl(null);
                 setDataUrl(null);
@@ -530,22 +598,36 @@ export function SkyExplorer() {
             />
           ) : null}
 
-          <div className="overflow-hidden rounded-lg border border-zinc-800">
-            <SkyOverlay
-              key={
-                analysis.headline +
-                analysis.figures.map((f) => f.id).join("-")
-              }
+          {score?.highlights?.length ? (
+            <FeatureReveal
+              key={analysis.headline}
               imageUrl={previewUrl}
               analysis={analysis}
+              highlights={score.highlights}
+              totalPoints={score.figurePointsTotal}
               selectedId={selected?.id ?? null}
               onSelect={setSelected}
               revealedStarIds={revealedStarIds}
-              progressive
+              onSettled={() => setAwardsSettled(true)}
+              frameRarity={score.rarity}
+              onCatch={(feature) => ambienceRef.current?.flourish?.(feature.figureName)}
             />
-          </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-zinc-800">
+              <SkyOverlay
+                imageUrl={previewUrl}
+                analysis={analysis}
+                selectedId={selected?.id ?? null}
+                onSelect={setSelected}
+                revealedStarIds={revealedStarIds}
+                progressive
+              />
+            </div>
+          )}
 
-          {!revealing && score ? <ScoreBreakdown score={score} /> : null}
+          {(awardsSettled || !score?.highlights?.length) && score ? (
+            <ScoreBreakdown score={score} />
+          ) : null}
 
           {!revealing ? (
             <StarStructure
@@ -559,23 +641,30 @@ export function SkyExplorer() {
             <div className="flex flex-col gap-3">
               {!selected ? (
                 <p className="text-sm text-zinc-500">
-                  {revealing
-                    ? "Verified stars appear one at a time after the configuration match test."
-                    : "Tap a lit star or a chip below for details."}
+                  {awardsSettled
+                    ? "Tap a gold feature or a chip below for details."
+                    : "Each catch is awarded on its own. Skip if you want the total now."}
                 </p>
               ) : null}
               <ul className="flex flex-wrap gap-2">
-                {analysis.figures.map((f) => (
+                {analysis.figures.map((f) => {
+                  const highlight = score?.highlights?.find(
+                    (h) => h.figureId === f.id
+                  );
+                  return (
                   <li key={f.id}>
                     <button
                       type="button"
                       onClick={() => setSelected(f)}
                       className={`rounded-full border px-3 py-1 text-xs transition ${
                         selected?.id === f.id
-                          ? "border-sky-400 bg-sky-500/20 text-sky-200"
-                          : "border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+                          ? "border-amber-300 bg-amber-400/20 text-amber-100"
+                          : highlight
+                            ? "border-amber-500/50 bg-amber-500/10 text-amber-100"
+                            : "border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
                       }`}
                     >
+                      {highlight ? `#${highlight.rank} ` : ""}
                       {f.name}
                       {f.stars.length > 0 ? (
                         <span className="ml-1 text-zinc-600">
@@ -584,7 +673,8 @@ export function SkyExplorer() {
                       ) : null}
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
             <FigurePanel

@@ -34,6 +34,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
       "Alnilam",
       "Mintaka",
       "Saiph",
+      "Meissa",
     ],
   },
   {
@@ -42,7 +43,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 6.7,
     decDeg: -20,
     sizeDeg: 18,
-    stars: ["Sirius", "Mirzam", "Wezen", "Adhara"],
+    stars: ["Sirius", "Mirzam", "Wezen", "Adhara", "Aludra"],
   },
   {
     name: "Taurus",
@@ -50,7 +51,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 4.5,
     decDeg: 16,
     sizeDeg: 22,
-    stars: ["Aldebaran", "Elnath"],
+    stars: ["Aldebaran", "Ain", "Hyadum", "Elnath"],
   },
   {
     name: "Pleiades",
@@ -58,7 +59,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 3.78,
     decDeg: 24.1,
     sizeDeg: 2,
-    stars: ["Alcyone", "Atlas", "Electra", "Maia", "Merope"],
+    stars: ["Alcyone", "Atlas", "Electra", "Maia", "Merope", "Taygeta", "Pleione"],
   },
   {
     name: "Gemini",
@@ -66,7 +67,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 7.3,
     decDeg: 22,
     sizeDeg: 20,
-    stars: ["Castor", "Pollux", "Alhena"],
+    stars: ["Castor", "Pollux", "Mebsuta", "Wasat", "Alhena"],
   },
   {
     name: "Leo",
@@ -74,7 +75,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 10.7,
     decDeg: 16,
     sizeDeg: 22,
-    stars: ["Regulus", "Denebola", "Algieba"],
+    stars: ["Regulus", "Algieba", "Adhafera", "Rasalas", "Zosma", "Chertan", "Denebola"],
   },
   {
     name: "Ursa Major",
@@ -114,7 +115,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 14.5,
     decDeg: 30,
     sizeDeg: 18,
-    stars: ["Arcturus"],
+    stars: ["Nekkar", "Seginus", "Izar", "Arcturus", "Muphrid"],
   },
   {
     name: "Virgo",
@@ -130,7 +131,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 16.9,
     decDeg: -30,
     sizeDeg: 25,
-    stars: ["Antares", "Shaula", "Sargas"],
+    stars: ["Acrab", "Dschubba", "Antares", "Sargas", "Shaula", "Lesath"],
   },
   {
     name: "Sagittarius",
@@ -138,7 +139,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 19.0,
     decDeg: -25,
     sizeDeg: 20,
-    stars: ["Kaus Australis", "Nunki"],
+    stars: ["Kaus Borealis", "Kaus Media", "Kaus Australis", "Ascella", "Nunki", "Alnasl"],
   },
   {
     name: "Cygnus",
@@ -154,7 +155,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 18.6,
     decDeg: 38,
     sizeDeg: 8,
-    stars: ["Vega"],
+    stars: ["Vega", "Zeta Lyr", "Sheliak", "Sulafat", "Delta Lyr"],
   },
   {
     name: "Aquila",
@@ -162,7 +163,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 19.7,
     decDeg: 5,
     sizeDeg: 18,
-    stars: ["Altair"],
+    stars: ["Tarazed", "Altair", "Alshain"],
   },
   {
     name: "Summer Triangle",
@@ -194,7 +195,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 22.7,
     decDeg: 20,
     sizeDeg: 25,
-    stars: ["Markab", "Scheat", "Algenib", "Alpheratz"],
+    stars: ["Markab", "Scheat", "Algenib", "Alpheratz", "Enif"],
   },
   {
     name: "Perseus",
@@ -210,7 +211,7 @@ export const BRIGHT_SKY_CATALOG: SkyCatalogEntry[] = [
     raHours: 5.8,
     decDeg: 42,
     sizeDeg: 18,
-    stars: ["Capella", "Menkalinan"],
+    stars: ["Capella", "Menkalinan", "Mahasim", "Elnath", "Hassaleh"],
   },
   {
     name: "Southern Cross",

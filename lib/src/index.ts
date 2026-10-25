@@ -34,6 +34,7 @@ export {
   awardFor,
   awardForFigure,
   inferSubjectsFromAnalysis,
+  selectSignificantFeatures,
   rubricFromAnalysis,
   scorePhoto,
   scoreSkyAnalysis,
@@ -45,6 +46,7 @@ export type {
   AwardResult,
   FigureAward,
   IdentityMethod,
+  SignificantFeature,
   RarityName,
   ScoreResult,
   SubjectKey,
@@ -64,6 +66,7 @@ export type {
 export {
   CONSTELLATION_PATTERNS,
   catalogPromptBlock,
+  figureIdentity,
   findConstellationPattern,
   normalizeStarName,
 } from "./star-catalog";
@@ -75,6 +78,22 @@ export type {
 
 export { alignAnalysisToCatalog } from "./align-figures";
 export type { AlignResult, FigureAlignment } from "./align-figures";
+
+export {
+  getUpcomingCelestialEvents,
+  haversineKm,
+  rankEvents,
+  RARITY_POINTS,
+  RARITY_RANK,
+} from "./celestial-events";
+export type {
+  CelestialEvent,
+  CelestialEventKind,
+  EventRarity,
+  EventSortMode,
+  ObserverLocation,
+  RankedCelestialEvent,
+} from "./celestial-events";
 
 export { buildFovPrediction, crossCheckWithFov } from "./sky-fov";
 export type {

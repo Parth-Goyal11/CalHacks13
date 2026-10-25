@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { SkyAnalysis, SkyFigure, SkyStar } from "@calhacks13/lib";
+import {
+  figureIdentity,
+  type SignificantFeature,
+  type SkyAnalysis,
+  type SkyFigure,
+  type SkyStar,
+} from "@calhacks13/lib";
 
 interface SkyOverlayProps {
   imageUrl: string;
   analysis: SkyAnalysis;
   selectedId: string | null;
   onSelect: (figure: SkyFigure) => void;
+  /** When set, these figures stay bright and the rest recede. Points use this set. */
+  highlights?: SignificantFeature[] | null;
+  /** Feature currently being awarded. Others stay dark until unlocked. */
+  spotlightId?: string | null;
+  /** Highlights whose award beat has already played. */
+  unlockedIds?: ReadonlySet<string> | null;
   /** When set, only these star ids are drawn (progressive identify). */
   revealedStarIds?: ReadonlySet<string> | null;
   /** Soften the global fade-in when doing one-at-a-time reveal. */
@@ -63,11 +75,32 @@ export function SkyOverlay({
   onSelect,
   revealedStarIds = null,
   progressive = false,
+  highlights = null,
+  spotlightId = null,
+  unlockedIds = null,
 }: SkyOverlayProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [reveal, setReveal] = useState(progressive ? 1 : 0);
+  const [draw, setDraw] = useState(1);
   const [size, setSize] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    if (!spotlightId) {
+      setDraw(1);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / 1100);
+      setDraw(easeOut(t));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    setDraw(0);
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [spotlightId]);
 
   useEffect(() => {
     if (progressive) {
@@ -98,11 +131,14 @@ export function SkyOverlay({
   }, []);
 
   const starT = progressive ? 1 : Math.min(1, reveal / 0.55);
-  const lineT = progressive
-    ? revealedStarIds && revealedStarIds.size > 1
-      ? 1
-      : 0
-    : Math.max(0, (reveal - 0.35) / 0.65);
+  const ceremonyOn = unlockedIds != null || spotlightId != null;
+  const lineT = ceremonyOn
+    ? 1
+    : progressive
+      ? revealedStarIds && revealedStarIds.size > 1
+        ? 1
+        : 0
+      : Math.max(0, (reveal - 0.35) / 0.65);
   const labelT = progressive
     ? 1
     : Math.max(0, (reveal - 0.55) / 0.45);
@@ -117,10 +153,24 @@ export function SkyOverlay({
     canvas.height = size.h;
     ctx.clearRect(0, 0, size.w, size.h);
 
+    const highlightIds = new Set((highlights ?? []).map((h) => h.figureId));
+    const hasHighlights = highlightIds.size > 0;
+    const ceremony = unlockedIds != null;
+
     for (const figure of analysis.figures) {
-      const dim = selectedId !== null && selectedId !== figure.id ? 0.22 : 1;
+      const live = ceremony && figure.id === spotlightId;
+      const banked = ceremony && unlockedIds.has(figure.id) && !live;
+      const featured = ceremony
+        ? live || banked
+        : !hasHighlights || highlightIds.has(figure.id);
+      const showStars =
+        live || banked ? null : revealedStarIds;
+      const dim =
+        (selectedId !== null && selectedId !== figure.id ? 0.22 : 1) *
+        (live ? 1 : featured ? 0.72 : ceremony ? 0.08 : 0.28);
       const focused = selectedId === null || selectedId === figure.id;
-      const points = pointsForFigure(figure, revealedStarIds);
+      const accent = figureIdentity(figure.name, figure.kind).accent;
+      const points = pointsForFigure(figure, showStars);
       const starMap = new Map(points.map((p) => [p.id, p]));
 
       for (const p of points) {
@@ -145,17 +195,22 @@ export function SkyOverlay({
       if (lineT <= 0.001) continue;
       ctx.save();
       ctx.globalAlpha = lineT * dim * (focused ? 0.7 : 0.45);
-      ctx.strokeStyle = focused
-        ? "rgba(210, 225, 255, 0.95)"
-        : "rgba(190, 210, 240, 0.85)";
+      ctx.strokeStyle = featured
+        ? accent
+        : focused
+          ? "rgba(210, 225, 255, 0.55)"
+          : "rgba(190, 210, 240, 0.4)";
       ctx.lineWidth = Math.max(
         1,
-        size.w * (focused && selectedId === figure.id ? 0.0018 : 0.0012)
+        size.w *
+          (featured ? 0.0024 : focused && selectedId === figure.id ? 0.0018 : 0.001)
       );
       ctx.lineCap = "round";
 
       for (const line of figure.lines) {
         if (
+          !live &&
+          !banked &&
           revealedStarIds &&
           (!revealedStarIds.has(line.from) || !revealedStarIds.has(line.to))
         ) {
@@ -166,16 +221,43 @@ export function SkyOverlay({
         if (!a || !b) continue;
         const x1 = a.x * size.w;
         const y1 = a.y * size.h;
-        const x2 = b.x * size.w;
-        const y2 = b.y * size.h;
+        const progress = live ? draw : 1;
+        const x2 = x1 + (b.x * size.w - x1) * progress;
+        const y2 = y1 + (b.y * size.h - y1) * progress;
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
       }
       ctx.restore();
+
+      if (!live || points.length === 0) continue;
+      const cx = points.reduce((s, p) => s + p.x, 0) / points.length;
+      const cy = points.reduce((s, p) => s + p.y, 0) / points.length;
+      const px = cx * size.w;
+      const py = cy * size.h;
+      const ring = (0.08 + draw * 0.16) * Math.min(size.w, size.h);
+      ctx.save();
+      ctx.globalAlpha = 0.85 * (1 - draw * 0.35);
+      ctx.strokeStyle = accent;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, ring, 0, Math.PI * 2 * Math.max(draw, 0.08));
+      ctx.stroke();
+      ctx.restore();
     }
-  }, [analysis, selectedId, size, starT, lineT, revealedStarIds]);
+  }, [
+    analysis,
+    selectedId,
+    size,
+    starT,
+    lineT,
+    revealedStarIds,
+    highlights,
+    spotlightId,
+    unlockedIds,
+    draw,
+  ]);
 
   return (
     <div ref={stageRef} className="sky-stage relative w-full overflow-hidden bg-black">
@@ -199,14 +281,28 @@ export function SkyOverlay({
 
       <div className="absolute inset-0 z-10">
         {analysis.figures.map((figure) => {
+          const highlight = (highlights ?? []).find((h) => h.figureId === figure.id);
+          const accent = figureIdentity(figure.name, figure.kind).accent;
+          const ceremony = unlockedIds != null;
+          const live = ceremony && figure.id === spotlightId;
+          const banked = ceremony && unlockedIds.has(figure.id);
+          const featured = ceremony
+            ? live || banked
+            : !highlights?.length || highlight != null;
           const dim = selectedId !== null && selectedId !== figure.id;
-          const points = pointsForFigure(figure, revealedStarIds);
+          const points = pointsForFigure(
+            figure,
+            live || banked ? null : revealedStarIds
+          );
           if (points.length === 0) return null;
           const lx = clamp01(figure.labelX) * 100;
           const ly = clamp01(figure.labelY) * 100;
           const showLabel =
-            !revealedStarIds ||
-            figure.stars.some((s) => revealedStarIds.has(s.id));
+            featured &&
+            (!revealedStarIds ||
+              live ||
+              banked ||
+              figure.stars.some((s) => revealedStarIds.has(s.id)));
 
           return (
             <div key={figure.id}>
@@ -237,7 +333,7 @@ export function SkyOverlay({
                           left: `${p.x * 100}%`,
                           top: `${p.y * 100}%`,
                           marginTop: 14,
-                          opacity: labelT * (dim ? 0.25 : 0.9),
+                          opacity: labelT * (live ? 1 : dim || !featured ? 0.15 : 0.75),
                           textShadow:
                             "0 0 8px rgba(0,0,0,0.95), 0 1px 2px rgba(0,0,0,0.9)",
                         }}
@@ -249,7 +345,20 @@ export function SkyOverlay({
                 );
               })}
 
-              {showLabel ? (
+              {live && highlight ? (
+                <span
+                  className="sky-medal pointer-events-none absolute"
+                  style={{
+                    left: `${lx}%`,
+                    top: `${ly}%`,
+                    ["--medal" as string]: accent,
+                  }}
+                >
+                  #{highlight.rank}
+                </span>
+              ) : null}
+
+              {showLabel && !live ? (
                 <button
                   type="button"
                   onClick={() => onSelect(figure)}
@@ -257,18 +366,21 @@ export function SkyOverlay({
                   style={{
                     left: `${lx}%`,
                     top: `${ly}%`,
-                    opacity: labelT * (dim ? 0.35 : 0.92),
+                    opacity: labelT * (dim ? 0.35 : featured ? 0.96 : 0.28),
                   }}
                 >
                   <span
                     className="block whitespace-nowrap text-[11px] font-medium tracking-wide sm:text-xs"
                     style={{
-                      color: "rgba(230, 238, 255, 0.92)",
-                      textShadow:
-                        "0 0 12px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.85), 0 0 24px rgba(140,180,255,0.35)",
+                      color: highlight ? accent : "rgba(230, 238, 255, 0.92)",
+                      textShadow: highlight
+                        ? `0 0 12px rgba(0,0,0,0.9), 0 0 18px ${accent}`
+                        : "0 0 12px rgba(0,0,0,0.9), 0 1px 2px rgba(0,0,0,0.85), 0 0 24px rgba(140,180,255,0.35)",
                     }}
                   >
+                    {highlight ? `#${highlight.rank} ` : ""}
                     {figure.name}
+                    {highlight ? ` · +${highlight.points}` : ""}
                   </span>
                   <span
                     className="mt-0.5 block text-[9px] uppercase tracking-[0.14em] text-sky-200/70"

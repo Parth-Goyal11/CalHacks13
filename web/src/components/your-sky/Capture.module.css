@@ -1,0 +1,77 @@
+.experience { --border: #71829a; line-height: 1.6; }
+.experience h1:focus { outline: none; }
+.experience h1 { font-size: clamp(28px, 4vw, 34px); }
+.fileInput { display: none; }
+.start { display: grid; grid-template-columns: 1.15fr 1fr; gap: 40px; align-items: center; }
+.startImage { position: relative; height: 360px; overflow: hidden; border-radius: 20px; background: var(--surface); }
+.startImage > img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.startHint { position: absolute; inset: auto 0 0; display: flex; align-items: center; gap: 10px; padding: 40px 20px 20px; background: linear-gradient(transparent, rgb(0 0 0 / 85%)); font-size: 14px; }
+.startActions { display: flex; flex-direction: column; gap: 16px; }
+.startActions > button:last-child { align-self: center; gap: 12px; }
+.secondary { display: inline-flex; justify-content: center; align-items: center; gap: 10px; min-height: 48px; width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: transparent; color: var(--text); font-size: 14px !important; font-weight: 550 !important; touch-action: manipulation; }
+.secondary:hover { background: var(--surface); }
+.secondary:active { background: var(--raised); }
+.helper { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.discoveryLayout { display: grid; grid-template-columns: 1.15fr 1fr; gap: 32px; align-items: start; }
+.discoveryLayout > * { min-width: 0; }
+.photoStage { position: relative; overflow: hidden; min-height: 180px; border-radius: 20px; background: var(--surface); }
+.photoStage > img { display: block; width: 100%; height: auto; }
+.photoToolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; min-height: 52px; color: var(--muted); font-size: 12px; }
+.photoToolbar button { font-size: 12px; }
+.previewFallback { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 280px; gap: 16px; padding: 24px; text-align: center; }
+.hotspot { position: absolute; min-height: 44px; min-width: 44px; display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border: 0; border-radius: 12px; background: rgb(11 13 18 / 92%); color: var(--text); font-size: 12px !important; opacity: 0; animation: reveal .45s cubic-bezier(.23, 1, .32, 1) forwards; transform: translate(-16px, -22px); }
+.hotspot:hover { background: var(--raised); }
+.targetRing { display: block; flex-shrink: 0; width: 24px; height: 24px; border: 1px solid var(--accent); border-radius: 50%; box-shadow: inset 0 0 0 6px rgb(184 209 243 / 12%); }
+@keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
+.taskPanel { display: flex; flex-direction: column; gap: 20px; }
+.taskPanel > p, .analysisStatus > p { color: var(--muted); font-size: 14px; }
+.taskPanel h2 { font-size: 22px; }
+.targetLabel { display: block; font-size: 14px; }
+.targetLabel > span { margin-left: 4px; color: var(--muted); font-size: 12px; }
+.targetLabel input { display: block; width: 100%; min-height: 48px; min-width: 0; margin-top: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 16px; }
+.targetLabel input::placeholder { color: var(--muted); opacity: 1; }
+.error { padding: 16px; margin-bottom: 24px; background: #29171c; border-radius: 12px; color: #fecaca; font-size: 14px; overflow-wrap: anywhere; }
+.analysisOverlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: rgb(11 13 18 / 75%); color: var(--text); font-size: 14px; }
+.analysisOverlay svg { width: 32px; height: 32px; }
+.analysisStatus { display: flex; flex-direction: column; gap: 20px; }
+.resultHeading { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
+.resultHeading > span { color: var(--muted); font-size: 12px; }
+.objectList { max-height: 440px; overflow-y: auto; overscroll-behavior: contain; padding: 4px; margin: -4px; }
+.notice { padding: 16px; border-radius: 12px; background: var(--surface); }
+.noObjects { padding: 24px 0; }
+.noObjects h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.noObjects p { color: var(--muted); font-size: 14px; }
+.resultDetails { font-size: 13px; color: var(--muted); }
+.resultDetails summary { display: list-item; min-height: 44px; padding: 12px 0; color: var(--accent); cursor: pointer; }
+.resultDetails summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.resultDetails p { margin: 12px 0; }
+.resultDetails pre { max-height: 240px; max-width: 100%; overflow: auto; padding: 16px; border-radius: 12px; background: var(--surface); font-size: 12px; }
+.camera { position: fixed; inset: 0; margin: 0; border: 0; padding: 0; width: 100%; max-width: none; height: 100dvh; max-height: none; background: #080a0e; color: var(--text); }
+.camera::backdrop { background: #080a0e; }
+.cameraView { position: relative; display: flex; flex-direction: column; min-height: 100dvh; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); }
+.camera video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cameraHeader { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; }
+.cameraHeader h2 { font-size: 18px; padding: 8px 12px; border-radius: 12px; background: rgb(11 13 18 / 85%); }
+.cameraClose, .galleryButton { display: grid; place-items: center; flex-shrink: 0; width: 48px; height: 48px; padding: 0; border: 1px solid var(--border); border-radius: 12px; background: rgb(11 13 18 / 85%); color: var(--text); }
+.cameraClose:hover, .galleryButton:hover { background: var(--raised); }
+.cameraGuide { position: relative; max-width: 360px; margin: auto auto 24px !important; padding: 12px 16px; border-radius: 12px; background: rgb(11 13 18 / 85%); text-align: center; font-size: 14px; }
+.cameraMessage { position: relative; display: flex; flex-direction: column; gap: 20px; max-width: 360px; width: 100%; margin: auto; padding: 32px 0; }
+.cameraMessage h3 { font-size: 24px; font-weight: 600; }
+.cameraMessage p { color: var(--muted); font-size: 14px; }
+.cameraControls { position: relative; display: grid; grid-template-columns: 48px 80px 48px; gap: 40px; align-items: center; justify-content: center; margin-top: 12px; }
+.shutter { width: 80px; height: 80px; border: 2px solid var(--text); padding: 5px; border-radius: 50%; background: transparent; }
+.shutter > span { display: block; width: 100%; height: 100%; border-radius: 50%; background: var(--text); }
+.shutter:active { transform: scale(.96); }
+@media (max-width: 767px) {
+  .start, .discoveryLayout { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .startImage { height: 240px; }
+  .startActions { gap: 12px; }
+  .startActions .helper { text-align: center; }
+  .taskPanel { gap: 16px; }
+  .photoStage { border-radius: 20px; }
+}
+@media (max-width: 359px) { .cameraControls { gap: 28px; } .hotspot { font-size: 11px !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .hotspot { animation: none; opacity: 1; }
+  .shutter:active { transform: none; }
+}
