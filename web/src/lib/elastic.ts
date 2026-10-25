@@ -12,6 +12,11 @@ export const JINA_RERANKER_INFERENCE_ID = ".jina-reranker-v3.5";
 
 let cached: Client | null = null;
 
+/** True when this environment has Elastic Cloud credentials. */
+export function hasElasticConfig(): boolean {
+  return Boolean(process.env.ELASTIC_URL && process.env.ELASTIC_API_KEY);
+}
+
 export function createElasticClient(): Client {
   if (cached) return cached;
 

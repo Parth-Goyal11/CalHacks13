@@ -1,4 +1,7 @@
-import { haversineKm } from "@calhacks13/lib/celestial-events";
+import {
+  getUpcomingCelestialEvents,
+  haversineKm,
+} from "@calhacks13/lib/celestial-events";
 import type {
   EventSortMode,
   ObserverLocation,
@@ -9,8 +12,11 @@ import type {
 import {
   CELESTIAL_EVENTS_INDEX,
   createElasticClient,
+  hasElasticConfig,
   type EsCelestialEventDoc,
 } from "@/lib/elastic";
+
+const PUBLIC_ERROR = "Sky events are unavailable. Please try again.";
 
 const SKY_VISIBLE_KINDS = [
   "full_moon",
@@ -204,29 +210,68 @@ export async function GET(request: Request) {
           }
         : null;
 
-    const client = createElasticClient();
-    const result = await client.search<EsCelestialEventDoc>({
-      index: CELESTIAL_EVENTS_INDEX,
-      size: 100,
-      query: buildQuery(observer, days, skyVisible, sort),
-    });
+    let events: RankedCelestialEvent[] = [];
+    let source: "elastic" | "live" = "live";
 
-    const events = result.hits.hits
-      .map((hit) => {
-        const doc = hit._source;
-        if (!doc) return null;
-        return docToRanked(doc, observer, hit._score ?? 0);
-      })
-      .filter((e): e is RankedCelestialEvent => e != null);
+    if (hasElasticConfig()) {
+      try {
+        events = await loadFromElastic(observer, days, skyVisible, sort);
+        source = "elastic";
+      } catch (elasticErr) {
+        console.warn(
+          "[celestial-events] Elastic unavailable, using the live catalog:",
+          elasticErr instanceof Error ? elasticErr.message : elasticErr,
+        );
+        events = await loadFromLive(observer, days, skyVisible, sort);
+      }
+    } else {
+      events = await loadFromLive(observer, days, skyVisible, sort);
+    }
 
     return Response.json({
       observer,
       count: events.length,
       events,
+      source,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load events";
     console.error("[celestial-events]", err);
-    return Response.json({ error: message }, { status: 500 });
+    return Response.json({ error: PUBLIC_ERROR }, { status: 500 });
   }
+}
+
+async function loadFromElastic(
+  observer: ObserverLocation | null,
+  days: number,
+  skyVisible: boolean,
+  sort: EventSortMode,
+): Promise<RankedCelestialEvent[]> {
+  const client = createElasticClient();
+  const result = await client.search<EsCelestialEventDoc>({
+    index: CELESTIAL_EVENTS_INDEX,
+    size: 100,
+    query: buildQuery(observer, days, skyVisible, sort),
+  });
+
+  return result.hits.hits
+    .map((hit) => {
+      const doc = hit._source;
+      if (!doc) return null;
+      return docToRanked(doc, observer, hit._score ?? 0);
+    })
+    .filter((event): event is RankedCelestialEvent => event != null);
+}
+
+async function loadFromLive(
+  observer: ObserverLocation | null,
+  days: number,
+  skyVisible: boolean,
+  sort: EventSortMode,
+): Promise<RankedCelestialEvent[]> {
+  return getUpcomingCelestialEvents({
+    observer,
+    days,
+    skyVisibleOnly: skyVisible,
+    sort,
+  });
 }
