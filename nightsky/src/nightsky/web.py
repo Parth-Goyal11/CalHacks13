@@ -12,6 +12,7 @@ from urllib.parse import unquote
 from nightsky.db import connect
 from nightsky.paths import OUTPUT
 from nightsky.photos import catalog_counts, demo_view, identify_photo, read_exif
+from nightsky.skyview import sky_chart
 
 HOST = "0.0.0.0"
 PORT = 8741
@@ -41,6 +42,9 @@ class ViewerHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = self.path.split("?", 1)[0]
+        if path == "/api/sky":
+            self._sky()
+            return
         if path not in {"/api/uploads", "/api/hints"}:
             self._send(404, b"Not found", "text/plain; charset=utf-8")
             return
@@ -69,6 +73,10 @@ class ViewerHandler(BaseHTTPRequestHandler):
             taken_at = _optional_time(fields.get("taken_at", {}).get("text", ""))
             latitude = _optional_float(fields.get("latitude", {}).get("text", ""))
             longitude = _optional_float(fields.get("longitude", {}).get("text", ""))
+            azimuth = _optional_float(fields.get("azimuth", {}).get("text", ""))
+            altitude = _optional_float(fields.get("altitude", {}).get("text", ""))
+            roll = _optional_float(fields.get("roll", {}).get("text", ""))
+            fov = _optional_float(fields.get("fov", {}).get("text", ""))
         except ValueError as exc:
             self._send_json({"ok": False, "error": str(exc)}, status=400)
             return
@@ -82,8 +90,48 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     taken_at=taken_at,
                     latitude=latitude,
                     longitude=longitude,
+                    azimuth_deg=azimuth,
+                    altitude_deg=altitude,
+                    roll_deg=roll,
+                    fov_deg=fov,
                 )
         self._send_json(_public(result))
+
+    def _sky(self) -> None:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 100_000:
+            self._send_json({"ok": False, "error": "The sky request was too large."}, status=400)
+            return
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            self._send_json({"ok": False, "error": "The sky request was not valid JSON."}, status=400)
+            return
+        if not isinstance(payload, dict):
+            self._send_json({"ok": False, "error": "The sky request was not valid JSON."}, status=400)
+            return
+        try:
+            latitude = float(payload["latitude"])
+            longitude = float(payload["longitude"])
+        except (KeyError, TypeError, ValueError):
+            self._send_json({"ok": False, "error": "The sky map needs a latitude and a longitude."}, status=400)
+            return
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            self._send_json(
+                {"ok": False, "error": "Latitude runs from −90 to 90 and longitude from −180 to 180."},
+                status=400,
+            )
+            return
+        try:
+            taken_at = _optional_time(str(payload.get("taken_at") or ""))
+        except ValueError as exc:
+            self._send_json({"ok": False, "error": str(exc)}, status=400)
+            return
+        if taken_at is None:
+            taken_at = datetime.now(timezone.utc)
+        with connect() as conn:
+            chart = sky_chart(conn, latitude, longitude, taken_at)
+        self._send_json(chart)
 
     def _hints(self, upload: dict | None) -> None:
         if not upload or not upload.get("data"):

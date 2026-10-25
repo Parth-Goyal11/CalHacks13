@@ -21,7 +21,7 @@ nightsky = "nightsky.__main__:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-nightsky = ["viewer.html"]
+nightsky = ["viewer.html", "wmm2025.cof"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -10,10 +10,12 @@ import numpy as np
 import psycopg
 from PIL import Image, ImageOps
 
+from nightsky.horizon import Aim
 from nightsky.imageutil import detect_stars, display_gray, draw_labels, load_gray_png, save_gray_png
 from nightsky.match import display_name, identify_capture, label_marks
 from nightsky.paths import OUTPUT
 from nightsky.pipeline import DEMO_KEY, store_solved_capture
+from nightsky.skyview import direction_radec, overlay_marks, overlay_rows, sky_chart, stars_in_view
 from nightsky.solve import solve_image
 from nightsky.stars import bright_stars
 
@@ -60,6 +62,10 @@ def identify_photo(
     longitude: float | None = None,
     elevation_m: float | None = None,
     exposure_seconds: float | None = None,
+    azimuth_deg: float | None = None,
+    altitude_deg: float | None = None,
+    roll_deg: float | None = None,
+    fov_deg: float | None = None,
 ) -> dict:
     """Solve one photo. A failed solve still returns the frame and the peaks that were found."""
     exif = read_exif(path)
@@ -84,19 +90,31 @@ def identify_photo(
     shown = display_gray(pixels)
     save_gray_png(shown, plain)
     detections = detect_stars(pixels, limit=160)
+    height, width = pixels.shape
+    aim = _aim(azimuth_deg, altitude_deg, roll_deg, fov_deg, width, height)
+    catalog = bright_stars(conn, mag_limit=5.6)
+    center = None
+    if aim is not None and taken_at is not None and latitude is not None and longitude is not None:
+        center = direction_radec(latitude, longitude, taken_at, aim.azimuth_deg, aim.altitude_deg)
+        catalog = stars_in_view(catalog, center[0], center[1], aim)
     try:
-        solved = solve_image(pixels, bright_stars(conn, mag_limit=5.6))
+        solved = solve_image(pixels, catalog)
     except RuntimeError as exc:
+        if aim is not None and center is not None:
+            return _predicted_photo(
+                conn, shown, key, resized, detections, aim, taken_at, latitude, longitude, hints, center
+            )
         draw_labels(shown, [], labeled)
         if max(pixels.shape) >= 200:
             save_gray_png(pixels, OUTPUT / f"{key}_sensor.png")
         return {
             "ok": False,
+            "grade": None,
             "error": str(exc),
             "image_key": f"{key}.png",
             "labeled_key": f"{key}_labeled.png",
-            "width": int(pixels.shape[1]),
-            "height": int(pixels.shape[0]),
+            "width": int(width),
+            "height": int(height),
             "resized": resized,
             "detections": len(detections),
             "solve": None,
@@ -134,6 +152,7 @@ def identify_photo(
     view.update(
         {
             "ok": True,
+            "grade": "matched" if aim is not None else "solved",
             "error": None,
             "resized": resized,
             "detections": len(detections),
@@ -141,6 +160,43 @@ def identify_photo(
         }
     )
     return view
+
+
+def _aim(azimuth_deg, altitude_deg, roll_deg, fov_deg, width: int, height: int) -> Aim | None:
+    if None in (azimuth_deg, altitude_deg, roll_deg, fov_deg):
+        return None
+    if fov_deg <= 1 or width < 2 or height < 2:
+        return None
+    return Aim(float(azimuth_deg) % 360.0, float(altitude_deg), float(roll_deg), float(fov_deg), width, height)
+
+
+def _predicted_photo(conn, shown, key, resized, detections, aim: Aim, taken_at, latitude, longitude, hints, center):
+    chart = sky_chart(conn, latitude, longitude, taken_at)
+    labeled = OUTPUT / f"{key}_labeled.png"
+    draw_labels(shown, overlay_marks(chart, aim), labeled, color=(186, 214, 255))
+    ra, dec = center
+    return {
+        "ok": True,
+        "grade": "predicted",
+        "error": None,
+        "image_key": f"{key}.png",
+        "labeled_key": f"{key}_labeled.png",
+        "width": aim.width,
+        "height": aim.height,
+        "resized": resized,
+        "detections": len(detections),
+        "solve": {
+            "center_ra_deg": ra,
+            "center_dec_deg": dec,
+            "pixel_scale_arcsec": aim.fov_deg / aim.width * 3600.0,
+            "rotation_deg": aim.roll_deg,
+        },
+        "taken_at": taken_at,
+        "latitude": latitude,
+        "longitude": longitude,
+        "hints": hints,
+        "identifications": overlay_rows(chart, aim),
+    }
 
 
 def demo_view(conn: psycopg.Connection) -> dict | None:

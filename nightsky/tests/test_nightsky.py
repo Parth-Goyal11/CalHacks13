@@ -366,6 +366,76 @@ def test_multipart_keeps_the_photo_bytes():
     assert fields["latitude"]["text"] == "31.95"
 
 
+def test_camera_center_is_the_center_pixel_and_east_is_right():
+    from nightsky.horizon import Aim, project_altaz
+
+    aim = Aim(azimuth_deg=0, altitude_deg=40, roll_deg=0, fov_deg=60, width=601, height=801)
+    center = project_altaz(40, 0, aim)
+    assert center is not None
+    assert abs(center[0] - 300) < 0.01
+    assert abs(center[1] - 400) < 0.01
+    higher = project_altaz(50, 0, aim)
+    east = project_altaz(40, 10, aim)
+    assert higher is not None and higher[1] < center[1]
+    assert east is not None and east[0] > center[0]
+    assert project_altaz(40, 180, aim) is None
+
+
+def test_declination_matches_a_wmm2025_sample():
+    from nightsky.magnetic import declination_deg
+
+    when = datetime(2025, 7, 1, tzinfo=timezone.utc)
+    assert abs(declination_deg(43, 93, when, altitude_km=65) - 0.50) < 0.05
+    bay = declination_deg(37.77, -122.42, datetime(2026, 10, 25, tzinfo=timezone.utc))
+    assert 12 < bay < 14
+
+
+def test_polaris_altitude_matches_latitude_and_centers_the_lens(db):
+    from nightsky.horizon import Aim, project_altaz
+    from nightsky.skyview import sky_chart
+
+    conn, _summary = db
+    when = datetime(2026, 10, 25, 5, 0, tzinfo=timezone.utc)
+    chart = sky_chart(conn, 37.77, -122.42, when)
+    polaris = chart["polaris"]
+    assert polaris["name"] == "Polaris"
+    assert abs(polaris["alt_deg"] - 37.77) < 1.2
+    assert min(polaris["az_deg"], 360 - polaris["az_deg"]) < 3
+    aim = Aim(polaris["az_deg"], polaris["alt_deg"], 0, 60, 800, 1000)
+    pixel = project_altaz(polaris["alt_deg"], polaris["az_deg"], aim)
+    assert pixel is not None
+    assert abs(pixel[0] - 399.5) < 1
+    assert abs(pixel[1] - 499.5) < 1
+    assert any(row["name"] == "Moon" for row in chart["objects"])
+
+
+def test_an_aim_labels_a_blank_photo_without_inventing_a_solve(db, tmp_path):
+    from nightsky.skyview import sky_chart
+
+    conn, _summary = db
+    when = datetime(2026, 10, 25, 5, 0, tzinfo=timezone.utc)
+    chart = sky_chart(conn, 37.77, -122.42, when)
+    polaris = chart["polaris"]
+    photo = tmp_path / "haze.png"
+    save_gray_png(np.full((220, 180), 40, dtype=np.float32), photo)
+    result = identify_photo(
+        conn,
+        photo,
+        taken_at=when,
+        latitude=37.77,
+        longitude=-122.42,
+        azimuth_deg=polaris["az_deg"],
+        altitude_deg=polaris["alt_deg"],
+        roll_deg=0,
+        fov_deg=60,
+    )
+    assert result["ok"] is True
+    assert result["grade"] == "predicted"
+    names = {row["name"] for row in result["identifications"]}
+    assert "Polaris" in names
+    assert result["solve"]["center_dec_deg"] > 80
+
+
 def test_viewer_page_and_file_guard():
     server = ThreadingHTTPServer(("127.0.0.1", 0), ViewerHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -375,6 +445,8 @@ def test_viewer_page_and_file_guard():
         with urlopen(f"http://{host}:{port}/") as response:
             page = response.read().decode()
         assert "Night sky" in page
+        assert "Sky map" in page
+        assert "Follow the phone" in page
         assert "Upload a photo" in page
         assert "north of the equator" in page
         assert "east of Greenwich" in page

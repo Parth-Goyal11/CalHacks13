@@ -88,6 +88,28 @@
     th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
     th { color: var(--muted); font-weight: 500; }
     .scroll { max-height: 420px; overflow: auto; }
+    .viewport {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 3 / 4;
+      max-height: 72vh;
+      background:
+        radial-gradient(ellipse at 50% 100%, #1a2744 0%, #070b14 55%, #05070c 100%);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .viewport video, .viewport canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .viewport video { object-fit: cover; background: transparent; }
+    #chart { z-index: 1; }
+    .aim { display: grid; gap: 8px; margin-top: 12px; }
+    .aim label { font-size: 14px; }
+    input[type="range"] { padding: 0; accent-color: var(--amber); }
+    #live[hidden], #still[hidden], #upload-tools[hidden] { display: none; }
     @media (max-width: 800px) {
       main { grid-template-columns: 1fr; }
       h1 { font-size: 32px; }
@@ -99,16 +121,43 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">This page shows the plate solve. Circles are catalog objects projected onto the picture. The Orion field is the known-good test. An upload runs the same solver on your file.</p>
+    <p class="lede">Point the phone and the catalog is drawn on the sky from where you are, what time it is, and which way the lens faces. Polaris is true north. Its height above the horizon is your latitude. A photo can snap those labels onto real stars when the pattern is clear.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
     <section class="stage">
       <div class="tabs">
-        <button id="tab-demo" class="active" type="button">Orion demo</button>
+        <button id="tab-sky" class="active" type="button">Sky map</button>
+        <button id="tab-demo" type="button">Orion demo</button>
         <button id="tab-upload" type="button">Upload a photo</button>
       </div>
-      <figure>
+      <div id="live">
+        <div id="viewport" class="viewport">
+          <video id="camera" playsinline autoplay muted></video>
+          <canvas id="chart"></canvas>
+        </div>
+        <div class="switch">
+          <button id="follow" type="button">Follow the phone</button>
+          <button id="open-camera" type="button">Open the camera</button>
+          <button id="hold" class="primary" type="button">Hold this view</button>
+        </div>
+        <p id="sky-status" class="note"></p>
+        <div class="aim">
+          <label>Heading from true north, degrees clockwise
+            <input id="heading" type="range" min="0" max="360" value="0">
+          </label>
+          <label>Lens height above the horizon, degrees
+            <input id="tilt" type="range" min="0" max="90" value="38">
+          </label>
+          <label>Roll, degrees clockwise
+            <input id="roll" type="range" min="-45" max="45" value="0">
+          </label>
+          <label>Lens width, degrees
+            <input id="fov" type="range" min="35" max="100" value="68">
+          </label>
+        </div>
+      </div>
+      <figure id="still" hidden>
         <img id="sky" alt="Night-sky field">
         <div class="switch">
           <button id="show-labeled" class="active" type="button">With labels</button>
@@ -118,10 +167,12 @@
       </figure>
     </section>
     <aside>
-      <form id="upload" hidden>
-        <label>Photo
-          <input id="photo" name="photo" type="file" accept="image/*">
-        </label>
+      <form id="upload">
+        <div id="upload-tools" hidden>
+          <label>Photo
+            <input id="photo" name="photo" type="file" accept="image/*">
+          </label>
+        </div>
         <label>Time, UTC, to the minute
           <input id="taken_at" name="taken_at" type="datetime-local">
         </label>
@@ -135,8 +186,10 @@
             <span class="hint">Decimal degrees from −180 to 180. Positive is east of Greenwich, negative is west. San Francisco is −122.42.</span>
           </label>
         </div>
-        <p class="note">Choosing a photo from the camera roll fills the time and the GPS fix when the file has them. This browser can also fill latitude and longitude from the device location. A camera clock has no time zone, so that time is read as UTC. Each star-like point is named on its own. The picture is darkened so those points stand out from the sky.</p>
-        <button id="solve" class="primary" type="submit">Solve this photo</button>
+        <div id="upload-tools-note" hidden>
+          <p class="note">Choosing a photo from the camera roll fills the time and the GPS fix when the file has them. This browser can also fill latitude and longitude from the device location. A camera clock has no time zone, so that time is read as UTC. Each star-like point is named on its own. The picture is darkened so those points stand out from the sky.</p>
+          <button id="solve" class="primary" type="submit">Solve this photo</button>
+        </div>
       </form>
       <div id="solution"></div>
       <div id="matches" class="scroll"></div>
@@ -153,6 +206,22 @@
     const showPlain = document.querySelector("#show-plain");
     let current = null;
     let labeled = true;
+    let chart = null;
+    let userAimed = false;
+    let followPhone = false;
+    let cameraOn = false;
+    let applying = false;
+    let chartLoading = false;
+    let skyError = "";
+    let listedAt = 0;
+    let sensorNote = "";
+    const headingInput = document.querySelector("#heading");
+    const tiltInput = document.querySelector("#tilt");
+    const rollInput = document.querySelector("#roll");
+    const fovInput = document.querySelector("#fov");
+    const canvas = document.querySelector("#chart");
+    const video = document.querySelector("#camera");
+    const skyStatus = document.querySelector("#sky-status");
 
     function setStatus(text, isError) {
       status.textContent = text || "";
@@ -175,12 +244,16 @@
     function render(data) {
       current = data;
       showImage();
-      if (!data.ok) {
+      if (data.grade === "predicted") {
+        const count = (data.identifications || []).length;
+        setStatus(`${count} labels are placed from the phone's aim. The dots in the photo did not confirm them.`);
+      } else if (!data.ok) {
         setStatus(data.error || "The solve failed.", true);
       } else {
         const named = (data.identifications || []).filter((row) => row.object_type === "star" && (row.confidence || 0) >= 0.9).length;
         const resized = data.resized ? " The long edge was reduced to 1400 pixels." : "";
-        setStatus(`${named} individual stars are named.${resized}`);
+        const snapped = data.grade === "matched" ? " The aim narrowed the catalog, and the star pattern confirmed the names." : "";
+        setStatus(`${named} individual stars are named.${resized}${snapped}`);
       }
       const solve = data.solve;
       const rows = [
@@ -211,7 +284,8 @@
       }
 
       const found = data.identifications || [];
-      const visible = found.filter((row) => row.name && (row.confidence || 0) >= 0.9);
+      const cutoff = data.grade === "predicted" ? 0.5 : 0.9;
+      const visible = found.filter((row) => row.name && (row.confidence || 0) >= cutoff);
       matches.replaceChildren();
       if (!data.ok) {
         const note = document.createElement("p");
@@ -257,19 +331,25 @@
       render(data);
     }
 
-    document.querySelector("#tab-demo").addEventListener("click", () => {
-      document.querySelector("#tab-demo").classList.add("active");
-      document.querySelector("#tab-upload").classList.remove("active");
-      form.hidden = true;
-      loadDemo();
-    });
-    document.querySelector("#tab-upload").addEventListener("click", () => {
-      document.querySelector("#tab-upload").classList.add("active");
-      document.querySelector("#tab-demo").classList.remove("active");
-      form.hidden = false;
-      setStatus("Choose a photo. The Orion result stays up until you solve.");
-      fillDeviceLocation();
-    });
+    function selectTab(name) {
+      for (const id of ["sky", "demo", "upload"]) {
+        document.querySelector(`#tab-${id}`).classList.toggle("active", id === name);
+      }
+      document.querySelector("#live").hidden = name !== "sky";
+      document.querySelector("#still").hidden = name === "sky";
+      form.hidden = name === "demo";
+      document.querySelector("#upload-tools").hidden = name !== "upload";
+      document.querySelector("#upload-tools-note").hidden = name !== "upload";
+      if (name === "demo") loadDemo();
+      if (name === "upload") {
+        setStatus("Choose a photo. The Orion result stays up until you solve.");
+        fillDeviceLocation();
+      }
+      if (name === "sky") drawChart();
+    }
+    document.querySelector("#tab-sky").addEventListener("click", () => selectTab("sky"));
+    document.querySelector("#tab-demo").addEventListener("click", () => selectTab("demo"));
+    document.querySelector("#tab-upload").addEventListener("click", () => selectTab("upload"));
     document.querySelector("#photo").addEventListener("change", async () => {
       const file = document.querySelector("#photo").files[0];
       if (!file) return;
@@ -334,7 +414,386 @@
         button.disabled = false;
       }
     });
-    loadDemo();
+    function pad(number) {
+      return String(number).padStart(2, "0");
+    }
+
+    function utcMinute(date = new Date()) {
+      return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
+    }
+
+    function placeTime() {
+      const time = document.querySelector("#taken_at");
+      if (!time.value) time.value = utcMinute();
+      const latitude = Number(document.querySelector("#latitude").value);
+      const longitude = Number(document.querySelector("#longitude").value);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+      return { latitude, longitude, taken_at: time.value };
+    }
+
+    function aimNow() {
+      const box = document.querySelector("#viewport");
+      return {
+        azimuth: Number(headingInput.value),
+        altitude: Number(tiltInput.value),
+        roll: Number(rollInput.value),
+        fov: Number(fovInput.value),
+        width: canvas.width || box.clientWidth,
+        height: canvas.height || box.clientHeight
+      };
+    }
+
+    function unit(altitudeDeg, azimuthDeg) {
+      const altitude = altitudeDeg * Math.PI / 180;
+      const azimuth = azimuthDeg * Math.PI / 180;
+      return [Math.cos(altitude) * Math.sin(azimuth), Math.cos(altitude) * Math.cos(azimuth), Math.sin(altitude)];
+    }
+
+    function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+    function cross(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+    function norm(v) { return Math.hypot(v[0], v[1], v[2]); }
+    function scale(v, factor) { return [v[0] * factor, v[1] * factor, v[2] * factor]; }
+    function add(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+
+    function basis(aim) {
+      const forward = unit(aim.altitude, aim.azimuth);
+      let right = cross(forward, [0, 0, 1]);
+      if (norm(right) < 1e-4) {
+        const heading = unit(0, aim.azimuth);
+        right = cross(forward, heading);
+      }
+      right = scale(right, 1 / norm(right));
+      let up = cross(right, forward);
+      up = scale(up, 1 / norm(up));
+      const roll = aim.roll * Math.PI / 180;
+      const cosine = Math.cos(roll);
+      const sine = Math.sin(roll);
+      return [
+        add(scale(right, cosine), scale(up, -sine)),
+        add(scale(right, sine), scale(up, cosine)),
+        forward
+      ];
+    }
+
+    function project(altitudeDeg, azimuthDeg, aim) {
+      const [right, up, forward] = basis(aim);
+      const star = unit(altitudeDeg, azimuthDeg);
+      const depth = dot(star, forward);
+      if (depth <= 0.02) return null;
+      const focal = (aim.width / 2) / Math.tan((aim.fov * Math.PI / 180) / 2);
+      return [
+        (aim.width - 1) / 2 + focal * dot(star, right) / depth,
+        (aim.height - 1) / 2 - focal * dot(star, up) / depth
+      ];
+    }
+
+    function showText(row) {
+      if (row.anchor || row.object_type !== "star") return true;
+      if (row.name && !row.name.startsWith("HIP ")) return true;
+      return row.mag != null && row.mag <= 2.5;
+    }
+
+    function resizeChart() {
+      const box = document.querySelector("#viewport");
+      const width = Math.max(2, box.clientWidth);
+      const height = Math.max(2, box.clientHeight);
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    }
+
+    function drawChart() {
+      resizeChart();
+      const aim = aimNow();
+      const context = canvas.getContext("2d");
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      if (!cameraOn) {
+        const wash = context.createRadialGradient(canvas.width / 2, canvas.height, 20, canvas.width / 2, canvas.height, canvas.height);
+        wash.addColorStop(0, "rgba(18, 32, 58, 0.55)");
+        wash.addColorStop(1, "rgba(5, 7, 12, 0)");
+        context.fillStyle = wash;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      context.strokeStyle = "rgba(226, 177, 90, 0.45)";
+      context.lineWidth = 1;
+      context.beginPath();
+      let pen = false;
+      for (let step = -aim.fov; step <= aim.fov; step += 2) {
+        const point = project(0, aim.azimuth + step, aim);
+        if (!point) { pen = false; continue; }
+        if (!pen) context.moveTo(point[0], point[1]);
+        else context.lineTo(point[0], point[1]);
+        pen = true;
+      }
+      context.stroke();
+      const placed = [];
+      const visible = [];
+      const rows = (chart && chart.objects ? chart.objects : []).slice().sort((a, b) => {
+        const rank = (row) => row.anchor ? -2 : row.object_type !== "star" ? -1 : (row.mag ?? 99);
+        return rank(a) - rank(b);
+      });
+      for (const row of rows) {
+        if (row.alt_deg < 0) continue;
+        const point = project(row.alt_deg, row.az_deg, aim);
+        if (!point || point[0] < 0 || point[1] < 0 || point[0] >= aim.width || point[1] >= aim.height) continue;
+        visible.push(row);
+        const color = row.anchor ? "#e2b15a" : row.object_type === "satellite" ? "#8fd0c6" : row.object_type === "star" ? "#f7f4ee" : "#f0d78c";
+        context.beginPath();
+        context.strokeStyle = color;
+        context.lineWidth = row.anchor ? 2 : 1;
+        context.arc(point[0], point[1], row.anchor ? 8 : 3, 0, Math.PI * 2);
+        context.stroke();
+        if (!showText(row)) continue;
+        if (placed.some(([x, y]) => Math.hypot(x - point[0], y - point[1]) < 22)) continue;
+        placed.push(point);
+        context.font = "13px Avenir Next, Segoe UI, sans-serif";
+        context.lineWidth = 3;
+        context.strokeStyle = "rgba(0, 0, 0, 0.85)";
+        context.fillStyle = color;
+        context.strokeText(row.name, point[0] + 8, point[1] - 6);
+        context.fillText(row.name, point[0] + 8, point[1] - 6);
+      }
+      context.font = "15px Palatino, Georgia, serif";
+      for (const [name, azimuth] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]) {
+        const point = project(0, azimuth, aim);
+        if (!point || point[0] < 8 || point[1] < 16 || point[0] > aim.width - 8 || point[1] > aim.height - 8) continue;
+        context.strokeStyle = "rgba(0, 0, 0, 0.85)";
+        context.fillStyle = "#e2b15a";
+        context.strokeText(name, point[0] - 5, point[1]);
+        context.fillText(name, point[0] - 5, point[1]);
+      }
+      if (skyError) {
+        skyStatus.textContent = skyError;
+      } else if (!chartLoading) {
+        const polaris = chart && chart.polaris;
+        const declination = chart && chart.declination_deg;
+        const correction = declination == null ? "" : ` A magnetic compass reads ${fmt(declination, 1)}° east of true north here.`;
+        const polarisLine = polaris
+          ? `Polaris is ${fmt(polaris.alt_deg, 1)}° up and ${fmt(polaris.az_deg, 1)}° from true north.`
+          : "Polaris is the north mark.";
+        skyStatus.textContent = `${polarisLine} ${visible.length} catalog objects are inside this lens.${correction}${sensorNote}`;
+      }
+      const now = performance.now();
+      if (document.querySelector("#tab-sky").classList.contains("active") && now - listedAt > 400) {
+        listedAt = now;
+        matches.replaceChildren();
+        const table = document.createElement("table");
+        const head = document.createElement("tr");
+        for (const label of ["Object", "Kind", "Up"]) {
+          const cell = document.createElement("th");
+          cell.textContent = label;
+          head.append(cell);
+        }
+        table.append(head);
+        for (const row of visible.filter(showText).slice(0, 40)) {
+          const line = document.createElement("tr");
+          for (const value of [row.name, row.object_type, `${fmt(row.alt_deg, 1)}°`]) {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            line.append(cell);
+          }
+          table.append(line);
+        }
+        matches.append(table);
+      }
+    }
+
+    async function refreshSky() {
+      const place = placeTime();
+      if (!place) {
+        skyStatus.textContent = "Add a latitude and longitude. The map is the sky from that spot.";
+        return;
+      }
+      chartLoading = true;
+      skyStatus.textContent = "Placing the catalog for this spot and time…";
+      try {
+        const response = await fetch("/api/sky", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(place)
+        });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          skyError = data.error || "The catalog could not be placed.";
+          skyStatus.textContent = skyError;
+          return;
+        }
+        skyError = "";
+        chart = data;
+        if (!userAimed && data.polaris) {
+          applying = true;
+          headingInput.value = String(data.polaris.az_deg);
+          tiltInput.value = String(Math.max(0, Math.min(90, data.polaris.alt_deg)));
+          applying = false;
+        }
+        drawChart();
+      } catch (error) {
+        skyError = "The viewer could not reach the catalog.";
+        skyStatus.textContent = skyError;
+      } finally {
+        chartLoading = false;
+      }
+    }
+
+    function onOrient(event) {
+      if (!followPhone || applying) return;
+      const screenAngle = (screen.orientation && screen.orientation.angle) || Number(window.orientation || 0);
+      let heading = null;
+      if (event.webkitCompassHeading != null && chart && chart.declination_deg != null) {
+        heading = (event.webkitCompassHeading + chart.declination_deg + 360) % 360;
+      } else if (event.alpha != null) {
+        const compass = (360 - event.alpha + screenAngle) % 360;
+        const shift = event.absolute || chart == null ? 0 : (chart.declination_deg || 0);
+        heading = (compass + shift + 360) % 360;
+      }
+      applying = true;
+      if (heading != null) headingInput.value = String(heading);
+      if (event.beta != null) tiltInput.value = String(Math.max(0, Math.min(90, 90 - event.beta)));
+      if (event.gamma != null) rollInput.value = String(Math.max(-45, Math.min(45, event.gamma)));
+      applying = false;
+    }
+
+    document.querySelector("#follow").addEventListener("click", async () => {
+      if (followPhone) {
+        followPhone = false;
+        sensorNote = "";
+        document.querySelector("#follow").classList.remove("primary");
+        skyStatus.textContent = "The sliders are steering the map.";
+        return;
+      }
+      const orientation = window.DeviceOrientationEvent;
+      if (!orientation) {
+        skyStatus.textContent = "This browser has no compass. Drag the heading and the lens height.";
+        return;
+      }
+      if (typeof orientation.requestPermission === "function") {
+        const state = await orientation.requestPermission();
+        if (state !== "granted") {
+          skyStatus.textContent = "The phone blocked motion access. Drag the heading and the lens height.";
+          return;
+        }
+      }
+      window.addEventListener("deviceorientationabsolute", onOrient, true);
+      window.addEventListener("deviceorientation", onOrient, true);
+      followPhone = true;
+      userAimed = true;
+      sensorNote = " Hold the phone upright. The map follows the compass and the tilt.";
+      document.querySelector("#follow").classList.add("primary");
+    });
+
+    document.querySelector("#open-camera").addEventListener("click", async () => {
+      if (cameraOn) {
+        for (const track of (video.srcObject ? video.srcObject.getTracks() : [])) track.stop();
+        video.srcObject = null;
+        cameraOn = false;
+        document.querySelector("#open-camera").classList.remove("primary");
+        return;
+      }
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        skyStatus.textContent = "This browser has no camera. The map still shows the catalog.";
+        return;
+      }
+      try {
+        video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        cameraOn = true;
+        document.querySelector("#open-camera").classList.add("primary");
+        video.onloadedmetadata = () => {
+          if (video.videoWidth) document.querySelector("#viewport").style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+        };
+      } catch (error) {
+        skyStatus.textContent = "The camera stayed closed. The map still shows the catalog.";
+      }
+    });
+
+    document.querySelector("#hold").addEventListener("click", async () => {
+      const place = placeTime();
+      if (!place) {
+        skyStatus.textContent = "Add a latitude and longitude before holding the view.";
+        return;
+      }
+      if (!cameraOn || !video.videoWidth) {
+        userAimed = true;
+        drawChart();
+        skyStatus.textContent = `${skyStatus.textContent} Open the camera to lay this map on a photo.`;
+        return;
+      }
+      const shot = document.createElement("canvas");
+      shot.width = video.videoWidth;
+      shot.height = video.videoHeight;
+      shot.getContext("2d").drawImage(video, 0, 0);
+      const blob = await new Promise((resolve) => shot.toBlob(resolve, "image/jpeg", 0.92));
+      const body = new FormData();
+      body.append("photo", blob, "sky.jpg");
+      body.append("taken_at", place.taken_at);
+      body.append("latitude", String(place.latitude));
+      body.append("longitude", String(place.longitude));
+      const aim = aimNow();
+      body.append("azimuth", String(aim.azimuth));
+      body.append("altitude", String(aim.altitude));
+      body.append("roll", String(aim.roll));
+      body.append("fov", String(aim.fov));
+      document.querySelector("#hold").disabled = true;
+      skyStatus.textContent = "Laying the catalog on this photo…";
+      try {
+        const response = await fetch("/api/uploads", { method: "POST", body });
+        const data = await response.json();
+        selectTab("upload");
+        document.querySelector("#still").hidden = false;
+        document.querySelector("#live").hidden = true;
+        render(data);
+      } catch (error) {
+        skyStatus.textContent = "The photo could not be labeled.";
+      } finally {
+        document.querySelector("#hold").disabled = false;
+      }
+    });
+
+    for (const input of [headingInput, tiltInput, rollInput, fovInput]) {
+      input.addEventListener("input", () => {
+        if (applying) return;
+        userAimed = true;
+        followPhone = false;
+        document.querySelector("#follow").classList.remove("primary");
+        drawChart();
+      });
+    }
+    for (const id of ["#latitude", "#longitude", "#taken_at"]) {
+      document.querySelector(id).addEventListener("change", refreshSky);
+    }
+
+    function bootPlace() {
+      const time = document.querySelector("#taken_at");
+      if (!time.value) time.value = utcMinute();
+      const latitude = document.querySelector("#latitude");
+      const longitude = document.querySelector("#longitude");
+      const fallback = () => {
+        if (!latitude.value) latitude.value = "37.77490";
+        if (!longitude.value) longitude.value = "-122.41940";
+        refreshSky();
+      };
+      if (!navigator.geolocation) { fallback(); return; }
+      navigator.geolocation.getCurrentPosition((position) => {
+        if (!latitude.value) latitude.value = position.coords.latitude.toFixed(5);
+        if (!longitude.value) longitude.value = position.coords.longitude.toFixed(5);
+        refreshSky();
+      }, fallback, { timeout: 4000, maximumAge: 60000 });
+    }
+
+    function tick() {
+      if (document.querySelector("#tab-sky").classList.contains("active")) drawChart();
+      requestAnimationFrame(tick);
+    }
+
+    fetch("/api/demo").then((response) => response.json()).then((data) => {
+      if (data.catalog) {
+        catalog.textContent = `${data.catalog.stars.toLocaleString()} Hipparcos stars and ${data.catalog.satellites.toLocaleString()} satellites are loaded.`;
+      }
+    }).catch(() => {
+      catalog.textContent = "The catalog has not loaded yet.";
+    });
+    bootPlace();
+    requestAnimationFrame(tick);
   </script>
 </body>
 </html>

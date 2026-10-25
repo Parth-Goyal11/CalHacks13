@@ -210,7 +210,12 @@ def _centroid(image: np.ndarray, x: int, y: int, radius: int = 2) -> tuple[float
     return float((xx * patch).sum() / total), float((yy * patch).sum() / total)
 
 
-def draw_labels(gray: np.ndarray, labels: list[tuple[float, float, str]], path: Path) -> None:
+def draw_labels(
+    gray: np.ndarray,
+    labels: list[tuple[float, float, str]],
+    path: Path,
+    color: tuple[int, int, int] = (255, 220, 80),
+) -> None:
     rgb = np.stack([gray, gray, gray], axis=-1)
     rgb = np.clip(rgb, 0, 255).astype(np.uint8)
     image = Image.fromarray(rgb, mode="RGB")
@@ -218,7 +223,7 @@ def draw_labels(gray: np.ndarray, labels: list[tuple[float, float, str]], path: 
     font = _label_font()
     for x, y, text in labels:
         radius = 8
-        draw.ellipse((x - radius, y - radius, x + radius, y + radius), outline=(255, 220, 80), width=2)
+        draw.ellipse((x - radius, y - radius, x + radius, y + radius), outline=color, width=2)
         if text:
             draw.text((x + 10, y - 8), text, fill=(255, 255, 255), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
     path.parent.mkdir(parents=True, exist_ok=True)
