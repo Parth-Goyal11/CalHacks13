@@ -1,0 +1,21 @@
+{
+  "name": "yonder-video",
+  "private": true,
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts YonderIntro ../video-output/yonder-intro.mp4",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.538",
+    "@remotion/cli": "4.0.538",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "typescript": "5.9.3"
+  }
+}

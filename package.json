@@ -13,7 +13,9 @@
     "sky-photo": "uvicorn sky_photo.main:app --reload --env-file .env --host 127.0.0.1 --port 8000",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:yonder": "tsx --tsconfig web/tsconfig.json tests/yonder-reveal.test.ts",
-    "test:sky-catalog": "tsx lib/scripts/verify-accuracy.mts"
+    "test:sky-catalog": "tsx lib/scripts/verify-accuracy.mts",
+    "video:studio": "npm --prefix video run studio",
+    "video:render": "npm --prefix video run render"
   },
   "engines": {
     "node": ">=20"
