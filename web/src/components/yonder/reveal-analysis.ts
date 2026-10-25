@@ -1,11 +1,34 @@
 import type { SkyAnalysisWithScore, SkyCaptureMeta } from "@calhacks13/lib";
 import { dataUrlToBase64, fileToResizedDataUrl } from "@/lib/image";
 import type { SkyPhotoResult } from "./photo-types";
+import type { CelestialObject } from "./sky-data";
 
 export type SkyRevealResult = SkyAnalysisWithScore & { meta: SkyCaptureMeta };
 
 export function revealFigures(reveal: SkyRevealResult) {
   return reveal.analysis.figures.filter((figure) => figure.id !== "none-confident");
+}
+
+/** Present Ben's data as Figma's original rings and object sheets. */
+export function revealObjects(reveal: SkyRevealResult): CelestialObject[] {
+  const figures = revealFigures(reveal);
+  const objects: CelestialObject[] = figures.map((figure) => {
+    const points = reveal.verification.acceptedStars.filter((star) => star.figureId === figure.id && Number.isFinite(star.x) && Number.isFinite(star.y) && star.x >= 0 && star.x <= 1 && star.y >= 0 && star.y <= 1);
+    return {
+      id: `figure-${figure.id}`,
+      figureId: figure.id,
+      name: figure.name,
+      kind: figure.kind,
+      detail: [figure.summary, figure.description, figure.mythology].filter(Boolean).join("\n\n"),
+      x: points.length ? points.reduce((sum, point) => sum + point.x, 0) / points.length * 100 : undefined,
+      y: points.length ? points.reduce((sum, point) => sum + point.y, 0) / points.length * 100 : undefined,
+    };
+  });
+  for (const star of reveal.verification.acceptedStars) {
+    if (!figures.some((figure) => figure.id === star.figureId) || objects.some((object) => object.name.toLowerCase() === star.starName.toLowerCase()) || !Number.isFinite(star.x) || !Number.isFinite(star.y) || star.x < 0 || star.x > 1 || star.y < 0 || star.y > 1) continue;
+    objects.push({ id: `star-${star.figureId}-${star.starId}`, figureId: star.figureId, name: star.starName, kind: `Star · ${star.figureName}`, detail: `A star identified within ${star.figureName}. This identification is a model estimate checked against the constellation’s star pattern.`, x: star.x * 100, y: star.y * 100 });
+  }
+  return objects;
 }
 
 /** Keep Ben's full response; summary fields let existing Memories remain compatible. */

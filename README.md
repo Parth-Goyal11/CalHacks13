@@ -4,7 +4,7 @@ Phone-first astronomy app for capturing a night sky, analyzing the photo, and ke
 
 See [Yonder setup and remaining app work](docs/yonder-integration.md) for the combined UI/API flow, provider configuration, phone testing and deployment requirements.
 
-The Yonder camera now runs Ben's `sky-image-proc` engine through `/api/analyze-sky`: Grok detections → catalog geometry checks → location/FOV cross-check → coded score → original star/constellation reveal components inside Yonder. Set `XAI_API_KEY` in root `.env`, optionally `SKY_VISION_MODEL`, then `npm install` and `npm run dev`. This flow does not require the Python service. Confirm each photo's location and capture time in review; camera angles are optional. Results and original photos can be saved to local Memories.
+The Yonder camera now runs Ben's `sky-image-proc` engine through `/api/analyze-sky`: Grok detections → catalog geometry checks → location/FOV cross-check → coded score → Figma's original photo/marker/detail-sheet UI. Set `XAI_API_KEY` in root `.env`, optionally `SKY_VISION_MODEL`, then `npm install` and `npm run dev`. This flow does not require the Python service. Confirm each photo's location and capture time in review; camera angles are optional. Results and original photos can be saved to local Memories.
 
 Offline checks: `npm run test:yonder` and `npm run test:sky-catalog`. The older Python pipeline below remains available separately and for existing Memories.
 

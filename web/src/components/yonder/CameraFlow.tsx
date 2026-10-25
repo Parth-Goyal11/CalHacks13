@@ -28,6 +28,7 @@ export default function CameraFlow({
   const [previewFailed, setPreviewFailed] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [analysisError, setAnalysisError] = useState("");
+  const [contextOpen, setContextOpen] = useState(false);
   const [retryCamera, setRetryCamera] = useState(0);
   const video = useRef<HTMLVideoElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -199,6 +200,7 @@ export default function CameraFlow({
     if (!photo || step === "loading") return;
     const meta = captureMeta(draft);
     if (!meta) {
+      setContextOpen(true);
       setAnalysisError("Enter a valid photo location and time. Check any optional camera angles too.");
       return;
     }
@@ -356,7 +358,11 @@ export default function CameraFlow({
                   it.
                 </p>
               )}
-              <CaptureDetails draft={draft} onChange={setDraft} error={analysisError} />
+              <details className="capture-context" open={contextOpen} onToggle={(event) => setContextOpen(event.currentTarget.open)}>
+                <summary>Photo location & time <span>{draft.latitude && draft.longitude ? "Review" : "Add details"}</span></summary>
+                <CaptureDetails draft={draft} onChange={setDraft} error={analysisError} />
+              </details>
+              {analysisError && !contextOpen && <div className="analysis-error" role="alert">{analysisError}</div>}
               <div className="capture-actions">
                 <button type="button" onClick={retake}>
                   Retake

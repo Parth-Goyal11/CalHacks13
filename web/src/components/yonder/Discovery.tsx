@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { annotationUrl, identificationLabel } from "./analysis";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import type { CelestialObject, SkyPhoto } from "./sky-data";
-import RevealDiscovery from "./RevealDiscovery";
+import ObjectExplanation from "./ObjectExplanation";
 
 export type DiscoveryProps = {
   photo: SkyPhoto;
@@ -16,11 +16,7 @@ export type DiscoveryProps = {
   onClose: () => void;
 };
 
-export default function Discovery(props: DiscoveryProps) {
-  return props.photo.result?.reveal ? <RevealDiscovery {...props} /> : <LegacyDiscovery {...props} />;
-}
-
-function LegacyDiscovery({
+export default function Discovery({
   photo,
   saved,
   saving,
@@ -36,6 +32,7 @@ function LegacyDiscovery({
   onClose: () => void;
 }) {
   const [selected, setSelected] = useState<CelestialObject | null>(null);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [showLabels, setShowLabels] = useState(true);
   const [annotationFailed, setAnnotationFailed] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
@@ -91,11 +88,12 @@ function LegacyDiscovery({
   return (
     <dialog
       ref={dialog}
-      className={`discovery overlay-dialog ${real ? "real-discovery" : ""}`}
+      className={`discovery overlay-dialog ${real ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery" : ""}`}
       aria-label={`Discover ${photo.title}`}
       onCancel={(event) => {
         event.preventDefault();
         if (selected) setSelected(null);
+        else if (analysisOpen) setAnalysisOpen(false);
         else onClose();
       }}
     >
@@ -132,7 +130,7 @@ function LegacyDiscovery({
         <div>
           <p>{real ? "Your sky" : "Sample sky"}</p>
           <span>
-            {real ? identificationLabel(result) : "Illustrative markers"}
+            {result?.reveal ? <><i /> {photo.objects.length} objects found</> : real ? identificationLabel(result) : "Illustrative markers"}
           </span>
         </div>
         <button
@@ -191,8 +189,14 @@ function LegacyDiscovery({
         </div>
       )}
 
-      {real && (
-        <section className="analysis-summary" aria-label="Photo analysis">
+      {result?.reveal && !selected && (
+        <button className="discovery-details-toggle" type="button" aria-expanded={analysisOpen} aria-controls="photo-analysis" onClick={() => setAnalysisOpen((open) => !open)}>
+          <SkyIcon name="spark" size={15} /> {analysisOpen ? "Back to your sky" : photo.objects.length ? "Your discoveries" : "No objects identified"}
+        </button>
+      )}
+      {real && (!result?.reveal || analysisOpen) && !selected && (
+        <section id="photo-analysis" className="analysis-summary" aria-label="Photo analysis">
+          {result?.reveal && <p className="review-note">{result.reveal.analysis.overview}</p>}
           {error && (
             <p role="alert" className="review-note">
               {error}
@@ -263,6 +267,16 @@ function LegacyDiscovery({
                 </div>
               )}
             </dl>
+            {result?.reveal && <>
+              <dl>
+                {Object.entries(result.reveal.score.rubric ?? {}).map(([name, value]) => <div key={name}><dt>{name}</dt><dd>{value}/10</dd></div>)}
+                <div><dt>Award points</dt><dd>{result.reveal.score.award?.points ?? 0}</dd></div>
+              </dl>
+              <p>{result.reveal.verification.summary}</p>
+              <p>{result.reveal.fovCheck.summary}</p>
+              <p>Catalog checks compare model detections with star patterns; this is not an Astrometry plate solve.</p>
+              <p>{result.reveal.score.figurePointsTotal} identification points. {result.reveal.score.capNotes.join(" ")}</p>
+            </>}
             {result?.critique?.strengths?.map((text, index) => (
               <p key={`strength-${index}`}>{text}</p>
             ))}
@@ -300,6 +314,7 @@ function LegacyDiscovery({
             </button>
           </div>
           <p className="object-detail">{selected.detail}</p>
+          {result?.reveal && selected.figureId && <ObjectExplanation key={selected.id} reveal={result.reveal} figureId={selected.figureId} />}
           <div className="sheet-footer">
             <span>
               <SkyIcon name="spark" size={17} />

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { captureMeta, type CaptureDraft } from "../web/src/components/yonder/CaptureDetails";
-import { toPhotoResult } from "../web/src/components/yonder/reveal-analysis";
+import { toPhotoResult, revealObjects } from "../web/src/components/yonder/reveal-analysis";
 import { identificationLabel } from "../web/src/components/yonder/analysis";
 import { objectsFromResult } from "../web/src/components/yonder/photo-discoveries";
 import { buildFovPrediction, crossCheckWithFov, findConstellationPattern, scoreSkyAnalysis, verifyAgainstStarDatabase, type SkyAnalysis } from "../lib/src/index";
@@ -25,12 +25,17 @@ assert.equal(result.annotations, undefined, "Model catalog checks must not becom
 assert.equal(result.final_score, reveal.score.finalScore);
 assert.match(identificationLabel(result), /model estimate/);
 assert.ok(objectsFromResult(result).some((object) => object.name === "Orion"));
+const uiObjects = revealObjects(reveal);
+assert.equal(uiObjects.length, 8, "Figma rings include the constellation and seven catalog-matched stars");
+assert.ok(uiObjects.some((object) => object.name === "Betelgeuse" && object.x === 72 && object.y === 18));
+assert.ok(uiObjects.every((object) => object.detail && object.figureId));
 const restored = structuredClone(result);
 assert.deepEqual(restored.reveal, reveal, "Full response and metadata survive memory serialization");
 const empty: SkyAnalysis = { headline: "No objects", overview: "No reliable identification", figures: [] };
 const emptyCheck = verifyAgainstStarDatabase(empty);
 const emptyResult = toPhotoResult({ ...emptyCheck, score: scoreSkyAnalysis(empty, meta), prediction, fovCheck: crossCheckWithFov(empty, prediction), meta });
 assert.equal(emptyResult.needs_review, true);
+assert.equal(revealObjects(emptyResult.reveal!).length, 0, "Internal Nothing verified placeholder gets no Figma marker");
 assert.equal(emptyResult.final_score, null);
 assert.equal(objectsFromResult(emptyResult).length, 0);
 assert.equal(identificationLabel(emptyResult), "No objects identified");

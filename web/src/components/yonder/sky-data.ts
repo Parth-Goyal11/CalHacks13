@@ -24,6 +24,7 @@ export type CelestialObject = {
   x?: number;
   y?: number;
   tone?: "violet" | "red";
+  figureId?: string;
 };
 
 export type SkyPhoto = {

@@ -16,6 +16,7 @@ import { IconButton, SkyIcon } from "./SkyIcon";
 import { IMG, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
 import { objectsFromResult, learningFor } from "./photo-discoveries";
+import { revealObjects } from "./reveal-analysis";
 import {
   readMemories,
   writeMemory,
@@ -62,6 +63,7 @@ function tabSnapshot(): Tab {
       : "home";
 }
 function objectsFor(result: SkyPhotoResult) {
+  if (result.reveal) return revealObjects(result.reveal);
   return objectsFromResult(result).map((object) => ({
     ...object,
     detail: learningFor(object).body,
