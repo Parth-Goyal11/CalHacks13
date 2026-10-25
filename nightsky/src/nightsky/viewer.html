@@ -129,7 +129,7 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">The map is the catalog drawn for where you are and what time it is, over a photograph of the real sky. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, the compass can turn the map, and the camera can replace the photograph while the names stay on top.</p>
+    <p class="lede">The map is the catalog drawn for where you are and what time it is, over a photograph of the real sky. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, the compass can turn the map. The camera replaces the photograph, and the names stay on top so stars in the lens can line up with them. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
@@ -166,6 +166,8 @@
           <p class="hint">The map follows the compass and how far you tip the phone. The browser asks to use motion sensors. Tap again to go back to the sliders.</p>
           <button id="open-camera" type="button">Show the sky behind the names</button>
           <p class="hint">Turns on the rear camera and leaves the names drawn on top of it, so stars through the lens can line up with the marks. The sky photograph returns when the camera is hidden. The browser asks to use the camera. Tap again to hide it.</p>
+          <button id="scan" class="primary" type="button">Scan this photo</button>
+          <p class="hint">Names the stars in that picture. The heading is not used. The result is the same plate solve as a scan with no aim.</p>
         </div>
       </div>
       <figure id="still" hidden>
@@ -259,8 +261,7 @@
       } else {
         const named = (data.identifications || []).filter((row) => row.object_type === "star" && (row.confidence || 0) >= 0.9).length;
         const resized = data.resized ? " The long edge was reduced to 1400 pixels." : "";
-        const snapped = data.grade === "matched" ? " The aim narrowed the catalog, and the star pattern confirmed the names." : "";
-        setStatus(`${named} individual stars are named.${resized}${snapped}`);
+        setStatus(`${named} individual stars are named.${resized}`);
       }
       const solve = data.solve;
       const rows = [
@@ -745,6 +746,42 @@
         };
       } catch (error) {
         skyStatus.textContent = "The camera stayed closed. The names are still on the map.";
+      }
+    });
+
+    document.querySelector("#scan").addEventListener("click", async () => {
+      const place = placeTime();
+      if (!place) {
+        skyStatus.textContent = "Add a latitude and longitude before scanning.";
+        return;
+      }
+      if (!cameraOn || !video.videoWidth) {
+        skyStatus.textContent = "Show the sky behind the names, then scan that picture.";
+        return;
+      }
+      const shot = document.createElement("canvas");
+      shot.width = video.videoWidth;
+      shot.height = video.videoHeight;
+      shot.getContext("2d").drawImage(video, 0, 0);
+      const blob = await new Promise((resolve) => shot.toBlob(resolve, "image/jpeg", 0.92));
+      const body = new FormData();
+      body.append("photo", blob, "sky.jpg");
+      body.append("taken_at", place.taken_at);
+      body.append("latitude", String(place.latitude));
+      body.append("longitude", String(place.longitude));
+      const button = document.querySelector("#scan");
+      button.disabled = true;
+      skyStatus.textContent = "Identifying the stars in this photo…";
+      try {
+        const response = await fetch("/api/uploads", { method: "POST", body });
+        const data = await response.json();
+        document.querySelector("#still").hidden = false;
+        document.querySelector("#live").hidden = true;
+        render(data);
+      } catch (error) {
+        skyStatus.textContent = "The photo could not be labeled.";
+      } finally {
+        button.disabled = false;
       }
     });
 
