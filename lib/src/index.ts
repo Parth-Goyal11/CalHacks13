@@ -103,3 +103,13 @@ export type {
   FovPrediction,
   PredictedFigure,
 } from "./sky-fov";
+
+export {
+  bearingDegrees,
+  defaultAltitudeForKind,
+  projectAltAzToScreen,
+  projectCatalogToScreen,
+  projectSkyToScreen,
+  SKY_FINDER_CATALOG_COUNT,
+} from "./sky-project";
+export type { ProjectedEventMarker, ScreenPoint } from "./sky-project";
