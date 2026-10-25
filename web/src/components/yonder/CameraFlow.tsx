@@ -8,21 +8,28 @@ import CaptureDetails, { captureMeta, type CaptureDraft } from "./CaptureDetails
 import { toDatetimeLocalValue } from "@/lib/image";
 import type { Place } from "./tonight-data";
 import { IconButton, SkyIcon } from "./SkyIcon";
-import LoadingScreen from "./LoadingScreen";
+import { IdentifyScan } from "@/components/sky/IdentifyScan";
+import { sampleScene, type SceneSketch } from "@/lib/sample-scene";
 
 export default function CameraFlow({
   onClose,
   onComplete,
+  onKeep,
   place,
   initialNotes = "",
+  initialFile = null,
 }: {
   onClose: () => void;
   onComplete: (file: File, result: SkyPhotoResult) => void;
+  onKeep?: (file: File) => void;
   place?: Place;
   initialNotes?: string;
+  initialFile?: File | null;
 }) {
-  const [draft, setDraft] = useState<CaptureDraft>(() => ({ latitude: place ? String(place.latitude) : "", longitude: place ? String(place.longitude) : "", takenAt: toDatetimeLocalValue(new Date()), facing: "", elevation: "", fov: "", notes: initialNotes }));
-  const [step, setStep] = useState<"live" | "preview" | "loading">("live");
+  const [draft, setDraft] = useState<CaptureDraft>(() => ({ latitude: place ? String(place.latitude) : "", longitude: place ? String(place.longitude) : "", takenAt: toDatetimeLocalValue(new Date()), facing: "", elevation: "", fov: "", notes: typeof initialNotes === "string" ? initialNotes : "" }));
+  const [step, setStep] = useState<"live" | "preview" | "loading">(
+    initialFile ? "preview" : "live",
+  );
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [canFlip, setCanFlip] = useState(false);
   const [ready, setReady] = useState(false);
@@ -41,9 +48,15 @@ export default function CameraFlow({
   const requestSerial = useRef(0);
   const generation = useRef(0);
   const photoUrl = useRef("");
+  const keptFile = useRef<File | null>(null);
+  const [stored, setStored] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [sketch, setSketch] = useState<SceneSketch | null>(null);
+  const [muted, setMuted] = useState(true);
 
   useEffect(() => {
     dialog.current?.showModal();
+    if (initialFile) selectPhoto(initialFile);
     return () => {
       generation.current += 1;
       requestSerial.current += 1;
@@ -69,9 +82,21 @@ export default function CameraFlow({
           return;
         }
         stream.current = media;
-        if (video.current) {
-          video.current.srcObject = media;
-          await video.current.play();
+        const feed = video.current;
+        if (feed) {
+          feed.srcObject = media;
+          const markReady = () => {
+            if (current === generation.current && feed.videoWidth > 0)
+              setReady(true);
+          };
+          feed.onloadedmetadata = markReady;
+          feed.onplaying = markReady;
+          try {
+            await feed.play();
+          } catch {
+            /* A later shutter tap retries playback. */
+          }
+          markReady();
         }
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (current === generation.current)
@@ -100,8 +125,12 @@ export default function CameraFlow({
       );
     }
     void connect();
+    const watch = window.setInterval(() => {
+      if (video.current && video.current.videoWidth > 0) setReady(true);
+    }, 300);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      window.clearInterval(watch);
       generation.current += 1;
       stream.current?.getTracks().forEach((track) => track.stop());
       stream.current = null;
@@ -123,6 +152,7 @@ export default function CameraFlow({
       (!type && /\.(jpe?g|png|heic|heif)$/i.test(file.name));
     if (!valid || !file.size || file.size > 20 * 1024 * 1024) {
       setCameraError("Choose a JPEG, PNG or HEIC photo smaller than 20 MB.");
+      setStep("live");
       return;
     }
     const normalized = type
@@ -142,6 +172,11 @@ export default function CameraFlow({
     setAnalysisError("");
     setCameraError("");
     setStep("preview");
+    if (keptFile.current !== normalized) {
+      keptFile.current = normalized;
+      setStored(true);
+      onKeep?.(normalized);
+    }
   }
 
   function chooseFile(event: ChangeEvent<HTMLInputElement>) {
@@ -149,10 +184,25 @@ export default function CameraFlow({
     event.target.value = "";
   }
 
-  function takePhoto() {
+  async function takePhoto() {
     const feed = video.current;
-    if (!feed || !ready || !feed.videoWidth || !feed.videoHeight) return;
-    const captureGeneration = generation.current;
+    if (!feed) {
+      setCameraError("The camera is not ready. Upload a photo instead.");
+      return;
+    }
+    if (feed.paused || !feed.videoWidth) {
+      try {
+        await feed.play();
+      } catch {
+        /* The frame check below explains what to do next. */
+      }
+    }
+    if (!feed.videoWidth || !feed.videoHeight) {
+      setCameraError(
+        "The camera has no picture yet. Allow camera access, or upload a photo.",
+      );
+      return;
+    }
     const canvas = document.createElement("canvas");
     canvas.width = feed.videoWidth;
     canvas.height = feed.videoHeight;
@@ -163,20 +213,20 @@ export default function CameraFlow({
       );
       return;
     }
-    context.drawImage(feed, 0, 0);
-    canvas.toBlob(
-      (blob) => {
-        if (captureGeneration !== generation.current) return;
-        if (blob)
-          selectPhoto(
-            new File([blob], `yonder-${Date.now()}.jpg`, {
-              type: "image/jpeg",
-            }),
-          );
-        else setCameraError("The photo could not be captured. Try again.");
-      },
-      "image/jpeg",
-      0.94,
+    if (facing === "user") {
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(feed, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, "image/jpeg", 0.92);
+    });
+    if (!blob) {
+      setCameraError("The photo could not be captured. Try again.");
+      return;
+    }
+    selectPhoto(
+      new File([blob], `yonder-${Date.now()}.jpg`, { type: "image/jpeg" }),
     );
   }
 
@@ -186,6 +236,7 @@ export default function CameraFlow({
     if (photoUrl.current) URL.revokeObjectURL(photoUrl.current);
     photoUrl.current = "";
     setPhoto(null);
+    setStored(false);
     setAnalysisError("");
     setCameraError("");
     setReady(false);
@@ -210,7 +261,19 @@ export default function CameraFlow({
     request.current = controller;
     const serial = ++requestSerial.current;
     setAnalysisError("");
+    setElapsed(0);
+    setSketch(null);
     setStep("loading");
+    const started = Date.now();
+    const clock = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      250,
+    );
+    void sampleScene(photo.url)
+      .then((sampled) => {
+        if (serial === requestSerial.current) setSketch(sampled);
+      })
+      .catch(() => null);
     const timer = window.setTimeout(() => controller.abort("timeout"), 105000);
     try {
       const result = await analyzeReveal(photo.file, meta, controller.signal);
@@ -227,6 +290,7 @@ export default function CameraFlow({
       );
       setStep("preview");
     } finally {
+      window.clearInterval(clock);
       window.clearTimeout(timer);
     }
   }
@@ -242,8 +306,19 @@ export default function CameraFlow({
         else onClose();
       }}
     >
-      {step === "loading" ? (
-        <LoadingScreen onCancel={cancelAnalysis} />
+      {step === "loading" && photo ? (
+        <div className="scan-flow">
+          <div className="scan-flow-top">
+            <IconButton label="Cancel analysis" icon="close" onClick={cancelAnalysis} />
+          </div>
+          <IdentifyScan
+            imageUrl={photo.url}
+            elapsed={elapsed}
+            sketch={sketch}
+            muted={muted}
+            onToggleMute={() => setMuted((value) => !value)}
+          />
+        </div>
       ) : (
         <>
           {step === "live" ? (
@@ -317,17 +392,18 @@ export default function CameraFlow({
                 <button
                   type="button"
                   className="gallery-picker"
-                  aria-label="Choose from photo library"
+                  aria-label="Upload a photo"
                   onClick={() => fileInput.current?.click()}
                 >
-                  <SkyIcon name="gallery" size={23} />
+                  <SkyIcon name="gallery" size={20} />
+                  <span>Upload</span>
                 </button>
                 <button
-                  className="shutter"
+                  className={`shutter${ready ? " shutter-ready" : ""}`}
                   type="button"
                   aria-label="Take photo"
-                  disabled={!ready}
-                  onClick={takePhoto}
+                  aria-disabled={!ready}
+                  onClick={() => void takePhoto()}
                 >
                   <span />
                 </button>
@@ -351,7 +427,7 @@ export default function CameraFlow({
                   icon="close"
                   onClick={onClose}
                 />
-                <span>Your sky</span>
+                <span>{stored ? "Saved in Memories" : "Your sky"}</span>
                 <span />
               </div>
               {previewFailed && (
@@ -360,7 +436,18 @@ export default function CameraFlow({
                   it.
                 </p>
               )}
-              <details className="capture-context" open={contextOpen} onToggle={(event) => setContextOpen(event.currentTarget.open)}>
+              <details
+                className="capture-context"
+                open={contextOpen}
+                onToggle={(event) => {
+                  const details = event.currentTarget;
+                  setContextOpen(
+                    details instanceof HTMLDetailsElement
+                      ? details.open
+                      : event.newState === "open",
+                  );
+                }}
+              >
                 <summary>Photo location & time <span>{draft.latitude && draft.longitude ? "Review" : "Add details"}</span></summary>
                 <CaptureDetails draft={draft} onChange={setDraft} error={analysisError} />
               </details>

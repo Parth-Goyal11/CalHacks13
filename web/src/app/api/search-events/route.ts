@@ -3,9 +3,11 @@ import type {
   EventRarity,
   RankedCelestialEvent,
 } from "@calhacks13/lib";
+import { getUpcomingCelestialEvents } from "@calhacks13/lib/celestial-events";
 import {
   CELESTIAL_EVENTS_INDEX,
   createElasticClient,
+  hasElasticConfig,
   JINA_RERANKER_INFERENCE_ID,
   type EsCelestialEventDoc,
 } from "@/lib/elastic";
@@ -116,21 +118,47 @@ function lexicalQuery(q: string) {
  * Hybrid search over celestial-events (Elastic track):
  * RRF(BM25 lexical + semantic summary) → Jina text_similarity_reranker.
  */
-export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const q = (searchParams.get("q") ?? "").trim();
-    if (!q) {
-      return Response.json(
-        { error: "Missing required query parameter q." },
-        { status: 400 }
-      );
-    }
+async function searchLive(q: string, size: number): Promise<RankedCelestialEvent[]> {
+  const events = await getUpcomingCelestialEvents({
+    days: 90,
+    skyVisibleOnly: true,
+    sort: "soonest",
+  });
+  const kinds = new Set(kindsForQuery(q));
+  const tokens = q
+    .toLowerCase()
+    .split(/\W+/)
+    .filter((token) => token.length > 2);
+  return events
+    .filter((event) => {
+      if (kinds.size > 0) return kinds.has(event.kind);
+      const blob = `${event.title} ${event.summary} ${event.photoTip}`.toLowerCase();
+      return tokens.some((token) => blob.includes(token));
+    })
+    .slice(0, size);
+}
 
-    const size = Math.min(
-      30,
-      Math.max(1, Number(searchParams.get("size") ?? "15"))
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const q = (searchParams.get("q") ?? "").trim();
+  if (!q) {
+    return Response.json(
+      { error: "Missing required query parameter q." },
+      { status: 400 }
     );
+  }
+
+  const size = Math.min(
+    30,
+    Math.max(1, Number(searchParams.get("size") ?? "15"))
+  );
+
+  try {
+
+    if (!hasElasticConfig()) {
+      const events = await searchLive(q, size);
+      return Response.json({ query: q, count: events.length, events, source: "live" });
+    }
 
     const client = createElasticClient();
     const result = await client.search<EsCelestialEventDoc>({
@@ -197,11 +225,19 @@ export async function GET(request: Request) {
       query: q,
       count: events.length,
       events,
+      source: "elastic",
     });
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Failed to search events";
     console.error("[search-events]", err);
-    return Response.json({ error: message }, { status: 500 });
+    try {
+      const events = await searchLive(q, size);
+      return Response.json({ query: q, count: events.length, events, source: "live" });
+    } catch (liveErr) {
+      console.error("[search-events] live fallback", liveErr);
+    }
+    return Response.json(
+      { error: "Event search is unavailable. Please try again." },
+      { status: 500 },
+    );
   }
 }

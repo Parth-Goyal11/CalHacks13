@@ -7,21 +7,28 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 import BottomNav from "./Navigation";
 import MemoriesScreen from "./MemoriesScreen";
 import CameraFlow from "./CameraFlow";
 import Discovery from "./Discovery";
+import SkyFinder from "./SkyFinder";
+import NightSkyMap from "./NightSkyMap";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import { IMG, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
 import { objectsFromResult, learningFor } from "./photo-discoveries";
 import { revealObjects } from "./reveal-analysis";
 import {
+  collectCreatures,
+  collectOne,
+  readCreatures,
   readMemories,
   writeMemory,
   removeMemory,
+  type StoredCreature,
   type StoredMemory,
 } from "./memory-store";
 import {
@@ -32,6 +39,7 @@ import {
 } from "./SkyLocation";
 import type { Place, CurrentWeather } from "./tonight-data";
 import { EventsBoard } from "@/components/events/EventsBoard";
+import type { RankedCelestialEvent } from "@calhacks13/lib";
 
 type LocalProfile = {
   name: string;
@@ -95,8 +103,14 @@ export default function YonderApp({
   );
   const [activePhoto, setActivePhoto] = useState<SkyPhoto | null>(null);
   const [cameraOpen, setCameraOpen] = useState(initialCapture);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const pendingCapture = useRef<{ id: string; createdAt: string } | null>(null);
+  const saveQueue = useRef(Promise.resolve());
+  const [skyFinderOpen, setSkyFinderOpen] = useState(false);
   const [captureTarget, setCaptureTarget] = useState("");
   const [savedPhotos, setSavedPhotos] = useState<SkyPhoto[]>([]);
+  const [creatures, setCreatures] = useState<StoredCreature[]>([]);
   const [latestPhoto, setLatestPhoto] = useState<SkyPhoto | null>(null);
   const [profile, setProfile] = useState(defaultProfile);
   const [sheet, setSheet] = useState<
@@ -127,6 +141,8 @@ export default function YonderApp({
             };
           }),
         );
+        const collection = await readCreatures();
+        if (!cancelled) setCreatures(collection);
       } catch {
         if (!cancelled)
           setError(
@@ -155,6 +171,7 @@ export default function YonderApp({
     void hydrate();
     function onBack() {
       setCameraOpen(false);
+      setSkyFinderOpen(false);
       setCaptureTarget("");
       setActivePhoto(null);
       setSheet(null);
@@ -180,32 +197,115 @@ export default function YonderApp({
   }
   function openCamera(target?: string) {
     pushOverlay();
-    setCaptureTarget(target ?? "");
+    setSkyFinderOpen(false);
+    setCaptureTarget(typeof target === "string" ? target : "");
+    setCameraOpen(true);
+  }
+  function openSkyFinder() {
+    pushOverlay();
+    setSkyFinderOpen(true);
+  }
+  function selectFinderEvent(event: RankedCelestialEvent) {
+    // Stay on the same overlay history entry; swap finder → capture.
+    setSkyFinderOpen(false);
+    setCaptureTarget(
+      `Capture target: ${event.title} (${event.kind.replaceAll("_", " ")}, ${event.rarity}, ${event.points} pts)`
+    );
     setCameraOpen(true);
   }
   function closeOverlay() {
+    pendingCapture.current = null;
     setCameraOpen(false);
+    setSkyFinderOpen(false);
     setCaptureTarget("");
+    setUploadedFile(null);
     setActivePhoto(null);
     if (window.history.state?.yonderOverlay) window.history.back();
   }
-  function completed(file: File, result: SkyPhotoResult) {
+  function openUploadPicker() {
+    uploadInput.current?.click();
+  }
+  function onUploadChosen(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    pushOverlay();
+    setUploadedFile(file);
+    setCameraOpen(true);
+  }
+  function capturedPhoto(file: File, result?: SkyPhotoResult): SkyPhoto {
+    if (!pendingCapture.current) {
+      pendingCapture.current = {
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+      };
+    }
+    const { id, createdAt } = pendingCapture.current;
     const image = URL.createObjectURL(file);
     objectUrls.current.push(image);
-    const createdAt = new Date().toISOString();
-    const photo: SkyPhoto = {
-      id: result.photo_id ?? crypto.randomUUID(),
+    const stored: SkyPhotoResult = result ?? {
+      is_night_sky: true,
+      needs_review: true,
+      detail:
+        "Saved from the camera. Analyze the sky to identify what is in the frame.",
+      identity: {
+        method: "captured",
+        constellations: [],
+        named_stars: [],
+        brightest_object: null,
+        other: [],
+      },
+    };
+    return {
+      id,
       image,
       blob: file,
-      result,
-      title: result.reveal?.analysis.headline ?? "My sky tonight",
+      result: stored,
+      title:
+        result?.reveal?.analysis.headline ??
+        result?.identity?.brightest_object ??
+        result?.identity?.constellations?.[0] ??
+        "My sky tonight",
       date: dateLabel(createdAt),
       createdAt,
-      location: result.reveal ? `${result.reveal.meta.latitude.toFixed(3)}°, ${result.reveal.meta.longitude.toFixed(3)}°` : sky.chosen ? sky.place.name : "Location not recorded",
-      objects: objectsFor(result),
-      note: "",
+      location: result?.reveal
+        ? `${result.reveal.meta.latitude.toFixed(3)}°, ${result.reveal.meta.longitude.toFixed(3)}°`
+        : sky.chosen
+          ? sky.place.name
+          : "Location not recorded",
+      objects: result ? objectsFor(stored) : [],
+      note: captureTarget,
     };
-    setLatestPhoto(photo);
+  }
+  function remember(photo: SkyPhoto) {
+    saveQueue.current = saveQueue.current
+      .then(async () => {
+        const memory = record(photo);
+        if (memory) await writeMemory(memory);
+        setSavedPhotos((current) => [
+          photo,
+          ...current.filter((item) => item.id !== photo.id),
+        ]);
+        setLatestPhoto(photo);
+      })
+      .catch(() => {
+        setError(
+          "The photo was captured, but it could not be stored in this browser. Free some storage and try again.",
+        );
+      });
+  }
+  function keepCapture(file: File) {
+    pendingCapture.current = null;
+    remember(capturedPhoto(file));
+  }
+  function formedCreature(creature: Parameters<typeof collectOne>[0]) {
+    void collectOne(creature).then(setCreatures).catch(() => undefined);
+  }
+  function completed(file: File, result: SkyPhotoResult) {
+    const photo = capturedPhoto(file, result);
+    remember(photo);
+    void collectCreatures(result).then(setCreatures).catch(() => undefined);
+    setUploadedFile(null);
     setCameraOpen(false);
     setActivePhoto(photo);
   }
@@ -288,7 +388,12 @@ export default function YonderApp({
         </a>
         <div
           className="app-content"
-          inert={cameraOpen || Boolean(activePhoto) || Boolean(sheet)}
+          inert={
+            cameraOpen ||
+            skyFinderOpen ||
+            Boolean(activePhoto) ||
+            Boolean(sheet)
+          }
         >
           <div id="yonder-content" tabIndex={-1}>
             {activeTab === "home" && (
@@ -301,6 +406,7 @@ export default function YonderApp({
                 onNotifications={() => setSheet("notifications")}
                 onOpen={openPhoto}
                 onCapture={openCamera}
+                onUpload={openUploadPicker}
                 onNote={() => setSheet("note")}
               />
             )}
@@ -313,11 +419,13 @@ export default function YonderApp({
                 onRetry={sky.retry}
                 onLocation={() => setSheet("location")}
                 eventsPlace={eventsPlace}
+                onOpenSkyFinder={openSkyFinder}
               />
             )}
             {activeTab === "memories" && (
               <MemoriesScreen
                 savedPhotos={savedPhotos}
+                creatures={creatures}
                 onOpen={openPhoto}
                 onCapture={openCamera}
               />
@@ -350,7 +458,22 @@ export default function YonderApp({
           />
         </div>
         {cameraOpen && (
-          <CameraFlow place={sky.chosen ? sky.place : undefined} initialNotes={captureTarget} onClose={closeOverlay} onComplete={completed} />
+          <CameraFlow place={sky.chosen ? sky.place : undefined} initialNotes={captureTarget} initialFile={uploadedFile} onClose={closeOverlay} onKeep={keepCapture} onComplete={completed} />
+        )}
+        <input
+          ref={uploadInput}
+          className="visually-hidden"
+          type="file"
+          accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
+          aria-label="Upload a sky photo"
+          onChange={onUploadChosen}
+        />
+        {skyFinderOpen && (
+          <SkyFinder
+            place={sky.place}
+            onClose={closeOverlay}
+            onSelectEvent={selectFinderEvent}
+          />
         )}
         {activePhoto && (
           <Discovery
@@ -361,6 +484,7 @@ export default function YonderApp({
             error={error}
             onSave={() => void toggleSave()}
             onClose={closeOverlay}
+            onCreature={formedCreature}
           />
         )}
         {sheet === "location" && (
@@ -433,6 +557,7 @@ function HomeScreen({
   onNotifications,
   onOpen,
   onCapture,
+  onUpload,
   onNote,
 }: {
   photo: SkyPhoto | null;
@@ -443,6 +568,7 @@ function HomeScreen({
   onNotifications: () => void;
   onOpen: (photo: SkyPhoto) => void;
   onCapture: () => void;
+  onUpload: () => void;
   onNote: () => void;
 }) {
   const [feed, setFeed] = useState<"friends" | "nearby">("friends");
@@ -463,7 +589,10 @@ function HomeScreen({
           <SkyIcon name="location" size={15} />
           <span>{place.name}</span>
         </button>
-        <h1 id="home-title">Yonder</h1>
+        <h1 id="home-title" className="brand-lockup">
+          <img src="/yonder-logo.jpg" alt="" width={36} height={36} />
+          Yonder
+        </h1>
         <button
           type="button"
           className="notification-button"
@@ -541,11 +670,15 @@ function HomeScreen({
         <button
           type="button"
           className="add-caption"
-          onClick={photo ? onNote : onCapture}
+          onClick={() => (photo ? onNote() : onCapture())}
         >
           {photo
             ? photo.note || "Add a note about your sky…"
             : "A little of tonight, kept forever."}
+        </button>
+        <button type="button" className="upload-photo" onClick={onUpload}>
+          <SkyIcon name="gallery" size={15} />
+          Upload a photo
         </button>
       </article>
       <div id="sky-feed" role="tabpanel" aria-labelledby={`feed-${feed}`}>
@@ -660,6 +793,7 @@ function ExploreScreen({
   onRetry,
   onLocation,
   eventsPlace,
+  onOpenSkyFinder,
 }: {
   place: Place;
   locationChosen: boolean;
@@ -673,6 +807,7 @@ function ExploreScreen({
     latitude: number;
     longitude: number;
   };
+  onOpenSkyFinder: () => void;
 }) {
   return (
     <section
@@ -719,6 +854,22 @@ function ExploreScreen({
           <span role="status">Checking the sky…</span>
         )}
       </div>
+      <NightSkyMap
+        latitude={place.latitude}
+        longitude={place.longitude}
+        placeName={place.name}
+      />
+      <button
+        type="button"
+        className="sky-finder-launch"
+        onClick={onOpenSkyFinder}
+      >
+        <span>
+          <strong>Sky Finder</strong>
+          <span>Point your phone — see stars and live events</span>
+        </span>
+        <em>Open</em>
+      </button>
       <EventsBoard
         place={eventsPlace}
         locationChosen={locationChosen}
@@ -777,7 +928,10 @@ function ProfileScreen({
       aria-labelledby="profile-title"
     >
       <header className="profile-header">
-        <p className="wordmark">Yonder</p>
+        <p className="wordmark brand-lockup">
+          <img src="/yonder-logo.jpg" alt="" width={36} height={36} />
+          Yonder
+        </p>
         <button type="button" aria-label="Edit profile" onClick={onEdit}>
           <span />
           <span />
@@ -860,7 +1014,7 @@ function ProfileScreen({
           ))}
         </div>
       ) : (
-        <button type="button" className="profile-first-sky" onClick={onCapture}>
+        <button type="button" className="profile-first-sky" onClick={() => onCapture()}>
           <SkyIcon name="camera" size={25} />
           <span>Your first sky belongs here.</span>
         </button>

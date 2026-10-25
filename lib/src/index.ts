@@ -79,14 +79,6 @@ export type {
 export { alignAnalysisToCatalog } from "./align-figures";
 export type { AlignResult, FigureAlignment } from "./align-figures";
 
-export {
-  getUpcomingCelestialEvents,
-  haversineKm,
-  pointsForEvent,
-  rankEvents,
-  RARITY_POINTS,
-  RARITY_RANK,
-} from "./celestial-events";
 export type {
   CelestialEvent,
   CelestialEventKind,
@@ -103,3 +95,13 @@ export type {
   FovPrediction,
   PredictedFigure,
 } from "./sky-fov";
+
+export {
+  bearingDegrees,
+  defaultAltitudeForKind,
+  projectAltAzToScreen,
+  projectCatalogToScreen,
+  projectSkyToScreen,
+  SKY_FINDER_CATALOG_COUNT,
+} from "./sky-project";
+export type { ProjectedEventMarker, ScreenPoint } from "./sky-project";

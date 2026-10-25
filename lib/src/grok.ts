@@ -1,5 +1,10 @@
 import { createXai } from "@ai-sdk/xai";
-import { generateText, streamText, type CoreMessage } from "ai";
+import {
+  experimental_generateImage as generateImage,
+  generateText,
+  streamText,
+  type CoreMessage,
+} from "ai";
 
 /**
  * Shared xAI Grok client for SpaceXAI track (Cursor + Grok Imagine/Voice).
@@ -17,6 +22,8 @@ export const grok = {
   /** Fast non-reasoning default for demos. */
   modelId: "grok-4.20-0309-non-reasoning" as const,
   visionModelId: "grok-4.20-0309-non-reasoning" as const,
+  /** Current Grok Imagine image model. grok-2-image is no longer served. */
+  imageModelId: "grok-imagine-image" as const,
 
   async chat(messages: CoreMessage[], options?: { model?: string; system?: string }) {
     const xai = createGrokClient();
@@ -27,6 +34,20 @@ export const grok = {
       system: options?.system,
       messages,
     });
+  },
+
+  /** One Grok Imagine still of a creature. Returns the image bytes, not a mesh. */
+  async imagine(prompt: string) {
+    const xai = createGrokClient();
+    const result = await generateImage({
+      model: xai.image(grok.imageModelId),
+      prompt,
+      maxRetries: 1,
+    });
+    return {
+      base64: result.image.base64,
+      mimeType: result.image.mimeType,
+    };
   },
 
   stream(messages: CoreMessage[], options?: { model?: string; system?: string }) {

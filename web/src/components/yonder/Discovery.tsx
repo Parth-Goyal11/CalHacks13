@@ -3,6 +3,11 @@
 /* eslint-disable @next/next/no-img-element -- Original user files and solver JPEGs must retain their geometry. */
 import { useEffect, useRef, useState } from "react";
 import { annotationUrl, identificationLabel } from "./analysis";
+import { FeatureReveal } from "@/components/sky/FeatureReveal";
+import { creatureFromObject, qualityTracks } from "./collection";
+import ConstellationMap from "./ConstellationMap";
+import CreaturePortrait from "./CreaturePortrait";
+import type { StoredCreature } from "./collection";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import type { CelestialObject, SkyPhoto } from "./sky-data";
 import ObjectExplanation from "./ObjectExplanation";
@@ -14,6 +19,7 @@ export type DiscoveryProps = {
   error?: string;
   onSave: () => void;
   onClose: () => void;
+  onCreature?: (creature: StoredCreature) => void;
 };
 
 export default function Discovery({
@@ -23,6 +29,7 @@ export default function Discovery({
   error,
   onSave,
   onClose,
+  onCreature,
 }: {
   photo: SkyPhoto;
   saved: boolean;
@@ -30,6 +37,7 @@ export default function Discovery({
   error?: string;
   onSave: () => void;
   onClose: () => void;
+  onCreature?: (creature: StoredCreature) => void;
 }) {
   const [selected, setSelected] = useState<CelestialObject | null>(null);
   const [analysisOpen, setAnalysisOpen] = useState(false);
@@ -88,7 +96,7 @@ export default function Discovery({
   return (
     <dialog
       ref={dialog}
-      className={`discovery overlay-dialog ${real ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery" : ""}`}
+      className={`discovery overlay-dialog ${real ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery has-diagrams" : ""}`}
       aria-label={`Discover ${photo.title}`}
       onCancel={(event) => {
         event.preventDefault();
@@ -97,7 +105,7 @@ export default function Discovery({
         else onClose();
       }}
     >
-      {!imageFailed ? (
+      {!result?.reveal && !imageFailed ? (
         <img
           ref={image}
           className="discovery-photo"
@@ -124,7 +132,7 @@ export default function Discovery({
           available below.
         </div>
       )}
-      <div className="discovery-vignette" />
+      {!result?.reveal && <div className="discovery-vignette" />}
       <div className="discovery-top">
         <IconButton label="Close discovery" icon="close" onClick={onClose} />
         <div>
@@ -146,11 +154,30 @@ export default function Discovery({
           <SkyIcon name="bookmark" />
         </button>
       </div>
-      <div className="photo-caption">
-        <strong>{photo.title}</strong>
-        <span>{photo.date}</span>
-      </div>
-      {annotated && !annotationFailed && (
+      {!result?.reveal && (
+        <div className="photo-caption">
+          <strong>{photo.title}</strong>
+          <span>{photo.date}</span>
+        </div>
+      )}
+      {result?.reveal && (
+        <div className="discovery-reveal">
+          <FeatureReveal
+            imageUrl={photo.image}
+            analysis={result.reveal.analysis}
+            highlights={result.reveal.score.highlights}
+            totalPoints={result.reveal.score.figurePointsTotal}
+            selectedId={selected?.figureId ?? null}
+            frameRarity={result.reveal.score.rarity}
+            onSelect={(figure) => {
+              const match = photo.objects.find((object) => object.figureId === figure.id);
+              if (match) selectObject(match);
+            }}
+            onCreature={onCreature}
+          />
+        </div>
+      )}
+      {!result?.reveal && annotated && !annotationFailed && (
         <button
           type="button"
           className="annotation-toggle"
@@ -161,7 +188,7 @@ export default function Discovery({
         </button>
       )}
 
-      {!imageFailed && (
+      {!result?.reveal && !imageFailed && (
         <div
           className="verified-marker-plane"
           style={real ? imageFrame : { inset: 0 }}
@@ -204,9 +231,11 @@ export default function Discovery({
           )}
           {result?.needs_review && (
             <p className="review-note">
-              {result.identity?.method === "plate-solved"
-                ? "Star positions are solved. The vision review is unavailable."
-                : "Identification needs review. Model suggestions are not confirmed detections."}
+              {result.identity?.method === "captured"
+                ? "This photo is saved in Memories. Analyze it to identify the sky."
+                : result.identity?.method === "plate-solved"
+                  ? "Star positions are solved. The vision review is unavailable."
+                  : "Identification needs review. Model suggestions are not confirmed detections."}
             </p>
           )}
           {photo.objects.length ? (
@@ -307,6 +336,11 @@ export default function Discovery({
               <p>{selected.kind}{selected.motif ? ` · ${selected.motif}` : ""}</p>
               {selected.highlightRank && <span className="selected-highlight">#{selected.highlightRank} scored highlight · +{selected.highlightPoints ?? 0} pts</span>}
               <h2>{selected.name}</h2>
+              {creatureFromObject(selected) ? (
+                <p className="creature-tier">
+                  Tier {creatureFromObject(selected)?.tier} · {creatureFromObject(selected)?.perk}
+                </p>
+              ) : null}
             </div>
             <button
               ref={detailClose}
@@ -318,8 +352,31 @@ export default function Discovery({
               <SkyIcon name="close" />
             </button>
           </div>
-          <p className="object-detail">{selected.detail}</p>
-          {selected.highlightReason && <p className="highlight-reason">{selected.highlightReason}</p>}
+          {creatureFromObject(selected) ? (
+            <div className={`caught-pair tier-${creatureFromObject(selected)!.tier.toLowerCase()}`}>
+              <ConstellationMap
+                name={selected.name}
+                tier={creatureFromObject(selected)!.tier}
+                progress={1}
+                accent={creatureFromObject(selected)!.accent}
+              />
+              <div>
+                <CreaturePortrait creature={creatureFromObject(selected)!} />
+                <ul className="quality-tracks">
+                  {(creatureFromObject(selected)!.tracks ?? qualityTracks(creatureFromObject(selected)!)).map((track) => (
+                    <li key={track.key}>
+                      <span>{track.label}</span> {track.value}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+          <details className="analysis-details">
+            <summary>About this pattern</summary>
+            <p className="object-detail">{selected.detail}</p>
+            {selected.highlightReason && <p className="highlight-reason">{selected.highlightReason}</p>}
+          </details>
           {result?.reveal && selected.figureId && <ObjectExplanation key={selected.id} reveal={result.reveal} figureId={selected.figureId} />}
           <div className="sheet-footer">
             <span>

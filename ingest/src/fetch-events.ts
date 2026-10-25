@@ -7,7 +7,7 @@ import {
   getUpcomingCelestialEvents,
   RARITY_RANK,
   type CelestialEvent,
-} from "@calhacks13/lib";
+} from "@calhacks13/lib/celestial-events";
 
 /** Document shape written to the celestial-events Elasticsearch index. */
 export interface IndexedCelestialEvent {

@@ -15,6 +15,16 @@
       "types": "./src/grok.ts",
       "import": "./src/grok.ts",
       "default": "./src/grok.ts"
+    },
+    "./celestial-events": {
+      "types": "./src/celestial-events.ts",
+      "import": "./src/celestial-events.ts",
+      "default": "./src/celestial-events.ts"
+    },
+    "./night-sky-chart": {
+      "types": "./src/night-sky-chart.ts",
+      "import": "./src/night-sky-chart.ts",
+      "default": "./src/night-sky-chart.ts"
     }
   },
   "scripts": {

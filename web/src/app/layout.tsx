@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./yonder-polish.css";
+import "./sky-reveal.css";
 
 export const metadata: Metadata = {
   title: "Yonder",
   description:
     "A little of tonight, kept forever. Capture your sky, discover what is in it, and keep your nights in Memories.",
+  icons: { icon: "/yonder-logo.jpg", apple: "/yonder-logo.jpg" },
 };
 
 export const viewport: Viewport = {
