@@ -1,4 +1,5 @@
-import { type Tab, type IconName } from "./sky-data";
+/* eslint-disable @next/next/no-img-element -- Shared static profile crop matches Home and Profile. */
+import { IMG, type Tab, type IconName } from "./sky-data";
 import { SkyIcon } from "./SkyIcon";
 
 export default function BottomNav({
@@ -50,7 +51,7 @@ export default function BottomNav({
         onClick={() => onChange("profile")}
       >
         <span className="profile-nav-avatar" aria-hidden="true">
-          <SkyIcon name="spark" size={17} />
+          <img src={IMG.profile} alt="" width={27} height={27} />
         </span>
         <span>Profile</span>
       </button>

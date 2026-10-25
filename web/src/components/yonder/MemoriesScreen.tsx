@@ -137,8 +137,9 @@ export default function MemoriesScreen({
                 key={photo.id}
                 onClick={() => onOpen(photo)}
               >
-                <img src={photo.image} alt={`${photo.title} night sky`} />
-                <span className="gallery-shade" />
+                <span className="gallery-thumbnail">
+                  <img src={photo.image} alt={`${photo.title} night sky`} loading="lazy" />
+                </span>
                 <span className="gallery-meta">
                   <strong>{photo.title}</strong>
                   <small>

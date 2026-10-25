@@ -11,6 +11,14 @@ import { IconButton, SkyIcon } from "./SkyIcon";
 import { IdentifyScan } from "@/components/sky/IdentifyScan";
 import { sampleScene, type SceneSketch } from "@/lib/sample-scene";
 
+function hasLiveCameraFrame(feed: HTMLVideoElement | null, media: MediaStream | null) {
+  return Boolean(
+    !document.hidden &&
+    feed && !feed.paused && feed.videoWidth > 0 && feed.videoHeight > 0 &&
+    media?.getVideoTracks().some((track) => track.readyState === "live" && track.enabled),
+  );
+}
+
 export default function CameraFlow({
   onClose,
   onComplete,
@@ -33,6 +41,9 @@ export default function CameraFlow({
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [canFlip, setCanFlip] = useState(false);
   const [ready, setReady] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const captureInFlight = useRef(false);
+  const captureSerial = useRef(0);
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
   const [previewFailed, setPreviewFailed] = useState(false);
   const [cameraError, setCameraError] = useState("");
@@ -49,7 +60,6 @@ export default function CameraFlow({
   const generation = useRef(0);
   const photoUrl = useRef("");
   const keptFile = useRef<File | null>(null);
-  const [stored, setStored] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [sketch, setSketch] = useState<SceneSketch | null>(null);
   const [muted, setMuted] = useState(true);
@@ -58,6 +68,7 @@ export default function CameraFlow({
     dialog.current?.showModal();
     if (initialFile) selectPhoto(initialFile);
     return () => {
+      captureSerial.current += 1;
       generation.current += 1;
       requestSerial.current += 1;
       request.current?.abort("navigation");
@@ -86,15 +97,15 @@ export default function CameraFlow({
         if (feed) {
           feed.srcObject = media;
           const markReady = () => {
-            if (current === generation.current && feed.videoWidth > 0)
-              setReady(true);
+            if (current === generation.current)
+              setReady(hasLiveCameraFrame(feed, media));
           };
           feed.onloadedmetadata = markReady;
           feed.onplaying = markReady;
           try {
             await feed.play();
           } catch {
-            /* A later shutter tap retries playback. */
+            /* Readiness updates if playback subsequently begins. */
           }
           markReady();
         }
@@ -119,6 +130,7 @@ export default function CameraFlow({
       if (!document.hidden) return;
       generation.current += 1;
       stream.current?.getTracks().forEach((track) => track.stop());
+      if (video.current) video.current.srcObject = null;
       setReady(false);
       setCameraError(
         "Camera paused while you were away. Tap Try camera again to resume.",
@@ -126,7 +138,8 @@ export default function CameraFlow({
     }
     void connect();
     const watch = window.setInterval(() => {
-      if (video.current && video.current.videoWidth > 0) setReady(true);
+      if (current === generation.current)
+        setReady(hasLiveCameraFrame(video.current, stream.current));
     }, 300);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
@@ -164,6 +177,9 @@ export default function CameraFlow({
               ? "image/heic"
               : "image/jpeg",
         });
+    captureSerial.current += 1;
+    captureInFlight.current = false;
+    setCapturing(false);
     if (photoUrl.current) URL.revokeObjectURL(photoUrl.current);
     const url = URL.createObjectURL(normalized);
     photoUrl.current = url;
@@ -174,7 +190,6 @@ export default function CameraFlow({
     setStep("preview");
     if (keptFile.current !== normalized) {
       keptFile.current = normalized;
-      setStored(true);
       onKeep?.(normalized);
     }
   }
@@ -185,22 +200,10 @@ export default function CameraFlow({
   }
 
   async function takePhoto() {
+    if (captureInFlight.current || step !== "live") return;
     const feed = video.current;
-    if (!feed) {
+    if (!feed || !hasLiveCameraFrame(feed, stream.current)) {
       setCameraError("The camera is not ready. Upload a photo instead.");
-      return;
-    }
-    if (feed.paused || !feed.videoWidth) {
-      try {
-        await feed.play();
-      } catch {
-        /* The frame check below explains what to do next. */
-      }
-    }
-    if (!feed.videoWidth || !feed.videoHeight) {
-      setCameraError(
-        "The camera has no picture yet. Allow camera access, or upload a photo.",
-      );
       return;
     }
     const canvas = document.createElement("canvas");
@@ -218,25 +221,47 @@ export default function CameraFlow({
       context.scale(-1, 1);
     }
     context.drawImage(feed, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(resolve, "image/jpeg", 0.92);
-    });
-    if (!blob) {
-      setCameraError("The photo could not be captured. Try again.");
-      return;
+    captureInFlight.current = true;
+    setCapturing(true);
+    const serial = ++captureSerial.current;
+    const cameraGeneration = generation.current;
+    try {
+      const blob = await new Promise<Blob | null>((resolve) => {
+        canvas.toBlob(resolve, "image/jpeg", 0.92);
+      });
+      if (serial !== captureSerial.current || cameraGeneration !== generation.current || document.hidden) return;
+      if (!blob) {
+        setCameraError("The photo could not be captured. Try again.");
+        return;
+      }
+      selectPhoto(
+        new File([blob], `yonder-${Date.now()}.jpg`, { type: "image/jpeg" }),
+      );
+    } catch {
+      if (serial === captureSerial.current && cameraGeneration === generation.current)
+        setCameraError("The photo could not be captured. Try again.");
+    } finally {
+      if (serial === captureSerial.current) {
+        captureInFlight.current = false;
+        setCapturing(false);
+      }
     }
-    selectPhoto(
-      new File([blob], `yonder-${Date.now()}.jpg`, { type: "image/jpeg" }),
-    );
+  }
+
+  function closeCamera() {
+    captureSerial.current += 1;
+    onClose();
   }
 
   function retake() {
+    captureSerial.current += 1;
+    captureInFlight.current = false;
+    setCapturing(false);
     request.current?.abort("cancel");
     requestSerial.current += 1;
     if (photoUrl.current) URL.revokeObjectURL(photoUrl.current);
     photoUrl.current = "";
     setPhoto(null);
-    setStored(false);
     setAnalysisError("");
     setCameraError("");
     setReady(false);
@@ -303,7 +328,7 @@ export default function CameraFlow({
       onCancel={(event) => {
         event.preventDefault();
         if (step === "loading") cancelAnalysis();
-        else onClose();
+        else closeCamera();
       }}
     >
       {step === "loading" && photo ? (
@@ -330,7 +355,7 @@ export default function CameraFlow({
                 muted
                 playsInline
                 aria-label="Camera preview"
-                onCanPlay={() => setReady(true)}
+                onCanPlay={() => setReady(hasLiveCameraFrame(video.current, stream.current))}
                 style={{
                   transform: facing === "user" ? "scaleX(-1)" : undefined,
                 }}
@@ -340,7 +365,7 @@ export default function CameraFlow({
                 <IconButton
                   label="Close camera"
                   icon="close"
-                  onClick={onClose}
+                  onClick={closeCamera}
                 />
                 <span>Camera</span>
                 <button
@@ -401,8 +426,9 @@ export default function CameraFlow({
                 <button
                   className={`shutter${ready ? " shutter-ready" : ""}`}
                   type="button"
-                  aria-label="Take photo"
-                  aria-disabled={!ready}
+                  aria-label={capturing ? "Capturing photo" : "Take photo"}
+                  disabled={!ready || capturing}
+                  aria-busy={capturing}
                   onClick={() => void takePhoto()}
                 >
                   <span />
@@ -425,9 +451,9 @@ export default function CameraFlow({
                 <IconButton
                   label="Close preview"
                   icon="close"
-                  onClick={onClose}
+                  onClick={closeCamera}
                 />
-                <span>{stored ? "Saved in Memories" : "Your sky"}</span>
+                <span>Your sky</span>
                 <span />
               </div>
               {previewFailed && (
