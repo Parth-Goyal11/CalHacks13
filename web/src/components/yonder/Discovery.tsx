@@ -96,7 +96,7 @@ export default function Discovery({
   return (
     <dialog
       ref={dialog}
-      className={`discovery overlay-dialog ${real ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery has-diagrams" : ""}`}
+      className={`discovery overlay-dialog ${real || photo.curated ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery has-diagrams" : ""}`}
       aria-label={`Discover ${photo.title}`}
       onCancel={(event) => {
         event.preventDefault();
@@ -136,9 +136,9 @@ export default function Discovery({
       <div className="discovery-top">
         <IconButton label="Close discovery" icon="close" onClick={onClose} />
         <div>
-          <p>{real ? "Your sky" : "Sample sky"}</p>
+          <p>{real ? "Your sky" : photo.curated ? "Sky highlights" : "Sample sky"}</p>
           <span>
-            {result?.reveal ? <><i /> {photo.objects.length} objects found</> : real ? identificationLabel(result) : "Illustrative markers"}
+            {result?.reveal ? <><i /> {photo.objects.length} objects found</> : real ? identificationLabel(result) : photo.curated ? "Photo highlights" : "Illustrative markers"}
           </span>
         </div>
         <button
@@ -191,7 +191,7 @@ export default function Discovery({
       {!result?.reveal && !imageFailed && (
         <div
           className="verified-marker-plane"
-          style={real ? imageFrame : { inset: 0 }}
+          style={real || photo.curated ? imageFrame : { inset: 0 }}
         >
           {photo.objects
             .filter(

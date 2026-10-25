@@ -22,7 +22,7 @@ This request supersedes the former Tonight/Capture/My Sky interface and its prev
 - Plate-solved and model-estimate identities must be distinguishable. Missing keys/vision review, no named detections, service failures and rejected daytime photos must be understandable.
 - Only solver coordinates may produce markers on a real user photo. Normalize them against the EXIF-oriented image and account for object-fit letterboxing. Do not use screenshot positions or sample stars as detections.
 - Keep originals uncropped in photo review and real discovery. Annotated JPEGs must retain their correct geometry.
-- Memories and profile editing currently use on-device storage. Mark sample social content as samples; do not imply connected friends, current planet visibility, cloud sync or authentication.
+- Memories and profile editing currently use on-device storage. The demo presents a seeded Jason Liu profile (34 skies, 87 discoveries, 6 places) and a static photo feed without sample labels, per the user brief. Do not imply a connected social network, cloud sync or authentication. User-supplied sky photos omit location labels; curated highlights describe visible features without claiming solved catalog identities.
 - Existing /upload and /my-sky entry points remain usable. /loading previews the minimal analysis loading design.
 
 ## Implementation and verification

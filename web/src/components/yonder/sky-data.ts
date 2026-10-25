@@ -44,14 +44,15 @@ export type SkyPhoto = {
   createdAt?: string;
   note?: string;
   credit?: string;
+  curated?: boolean;
 };
 
 export const IMG = {
-  home: "/yonder/photo-1.jpg",
+  home: "/yonder/skies/sky-1.png",
   mountain: "/yonder/photo-2.jpg",
   ridge: "/yonder/photo-3.jpg",
   field: "/yonder/photo-4.jpg",
-  profile: "/yonder/photo-5.jpg",
+  profile: "/yonder/people/jason-liu.jpeg",
   nebula: "/yonder/photo-6.jpg",
   orion: "/yonder/photo-7.jpg",
 };
@@ -133,33 +134,25 @@ export const exploreItems = [
   { label: "Orion Nebula", meta: "Southwest · setting", image: IMG.orion },
 ];
 
+const highlight = (id: string, name: string, x: number, y: number): CelestialObject => ({
+  id, name, x, y, kind: "Photo highlight", highlightRank: 1,
+  detail: "A visible feature highlighted in this photograph. A sky solve is needed to confirm a catalog identity.",
+});
+
+export const demoSkies: SkyPhoto[] = [
+  { id: "shared-sky-1", image: "/yonder/skies/sky-1.png", title: "A sky full of stars", date: "", location: "", curated: true,
+    objects: [highlight("star-field", "Dense star field", 53, 38), highlight("bright-point", "Bright star", 73, 50)] },
+  { id: "shared-sky-2", image: "/yonder/skies/sky-2.png", title: "Above the treetops", date: "", location: "", curated: true,
+    objects: [highlight("three-stars", "Three-star line", 48, 51), highlight("bright-star", "Bright star", 12, 56)] },
+  { id: "shared-sky-3", image: "/yonder/skies/sky-3.png", title: "Patterns in the dark", date: "", location: "", curated: true,
+    objects: [highlight("three-stars", "Three-star line", 80, 57), highlight("bright-star", "Bright star", 49, 77)] },
+  { id: "shared-sky-4", image: "/yonder/skies/sky-4.png", title: "A quieter night", date: "", location: "", curated: true,
+    objects: [highlight("three-stars", "Three-star line", 80, 57), highlight("bright-star", "Bright star", 49, 77)] },
+];
+
 export const friendPosts = [
-  {
-    name: "Noah",
-    place: "Oakland · now",
-    image: IMG.mountain,
-    avatar: "/yonder/people/noah-demo.jpg",
-    object: "Summer Triangle",
-  },
-  {
-    name: "Sofia",
-    place: "Marin · 8m",
-    image: IMG.ridge,
-    avatar: "/yonder/people/sofia-demo.jpg",
-    object: "Mars rising",
-  },
-  {
-    name: "Eli",
-    place: "Big Sur · 21m",
-    image: IMG.field,
-    avatar: "/yonder/people/eli-demo.jpg",
-    object: "Milky Way",
-  },
-  {
-    name: "Mina & Kai",
-    place: "Berkeley · 34m",
-    image: IMG.nebula,
-    avatar: "/yonder/people/friends-duo.jpg",
-    object: "Orion Nebula",
-  },
+  { name: "Noah", avatar: "/yonder/people/noah-demo.jpg", photo: demoSkies[0] },
+  { name: "Sofia", avatar: "/yonder/people/sofia-demo.jpg", photo: demoSkies[1] },
+  { name: "Eli", avatar: "/yonder/people/eli-demo.jpg", photo: demoSkies[2] },
+  { name: "Mina", avatar: "/yonder/people/friends-duo.jpg", photo: demoSkies[3] },
 ];

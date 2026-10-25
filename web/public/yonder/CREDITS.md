@@ -11,3 +11,5 @@ Imported without visual substitution from the user's Figma Make prototype.
 - photo-7.jpg: https://images.unsplash.com/photo-1608178398319-48f814d0750c?auto=format&fit=crop&w=1200&q=88
 
 The four `people/` demo profile photographs were supplied by the user for the sample home feed.
+
+The four `skies/` photographs and Jason Liu profile photograph were supplied by the user for this demo. Sky photo locations are intentionally omitted. Highlight labels describe visible features and are not plate-solved catalog identifications.

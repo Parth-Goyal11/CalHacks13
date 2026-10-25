@@ -17,7 +17,7 @@ import Discovery from "./Discovery";
 import SkyFinder from "./SkyFinder";
 import NightSkyMap from "./NightSkyMap";
 import { IconButton, SkyIcon } from "./SkyIcon";
-import { IMG, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
+import { IMG, demoSkies, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
 import { objectsFromResult, learningFor } from "./photo-discoveries";
 import { revealObjects } from "./reveal-analysis";
@@ -49,10 +49,10 @@ type LocalProfile = {
   sign: string;
 };
 const defaultProfile: LocalProfile = {
-  name: "You",
-  handle: "your-sky",
+  name: "Jason Liu",
+  handle: "jasonliu",
   bio: "A little closer to the night.",
-  school: "",
+  school: "Class of 2030",
   sign: "",
 };
 
@@ -414,11 +414,7 @@ export default function YonderApp({
               <ExploreScreen
                 place={sky.place}
                 locationChosen={sky.chosen}
-                weather={sky.weather}
-                weatherError={sky.weatherError}
-                onRetry={sky.retry}
                 onLocation={() => setSheet("location")}
-                eventsPlace={eventsPlace}
                 onOpenSkyFinder={openSkyFinder}
               />
             )}
@@ -436,8 +432,6 @@ export default function YonderApp({
                 savedPhotos={savedPhotos}
                 onEdit={() => setSheet("profile")}
                 onOpen={openPhoto}
-                onCapture={openCamera}
-                place={sky.chosen ? sky.place.name : "Choose your location"}
               />
             )}
             {activeTab === "events" && (
@@ -571,9 +565,8 @@ function HomeScreen({
   onUpload: () => void;
   onNote: () => void;
 }) {
-  const [feed, setFeed] = useState<"friends" | "nearby">("friends");
   const [liked, setLiked] = useState<string[]>([]);
-  const posts = feed === "friends" ? friendPosts : [...friendPosts].reverse();
+  const posts = friendPosts;
   return (
     <section
       className="screen scroll-screen social-home"
@@ -602,40 +595,6 @@ function HomeScreen({
           <SkyIcon name="bell" size={22} />
         </button>
       </header>
-      <div className="feed-tabs" role="tablist" aria-label="Sky feed">
-        {(["friends", "nearby"] as const).map((tab) => (
-          <button
-            type="button"
-            key={tab}
-            id={`feed-${tab}`}
-            className={feed === tab ? "is-active" : ""}
-            role="tab"
-            aria-selected={feed === tab}
-            aria-controls="sky-feed"
-            tabIndex={feed === tab ? 0 : -1}
-            onKeyDown={(event) => {
-              if (
-                ["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-              ) {
-                event.preventDefault();
-                const next =
-                  event.key === "Home"
-                    ? "friends"
-                    : event.key === "End"
-                      ? "nearby"
-                      : feed === "friends"
-                        ? "nearby"
-                        : "friends";
-                setFeed(next);
-                document.getElementById(`feed-${next}`)?.focus();
-              }
-            }}
-            onClick={() => setFeed(tab)}
-          >
-            {tab === "friends" ? "Friends" : "Nearby"}
-          </button>
-        ))}
-      </div>
       <article className="today-post">
         <div className="post-heading">
           <span className="post-avatar initials">
@@ -659,7 +618,7 @@ function HomeScreen({
             alt={
               photo
                 ? "Your sky photograph"
-                : "Sample star-filled sky, capture your own"
+                : "Star-filled sky, capture your own"
             }
           />
           <span className="sky-object-tag">
@@ -681,45 +640,10 @@ function HomeScreen({
           Upload a photo
         </button>
       </article>
-      <div id="sky-feed" role="tabpanel" aria-labelledby={`feed-${feed}`}>
-        <p className="feed-preview-label">A glimpse of Yonder · sample posts</p>
-        <div className="feed-people" aria-label="Sample sky posts">
-          {posts.map((post, index) => (
-            <button
-              type="button"
-              className="feed-person"
-              key={post.name}
-              onClick={() =>
-                document.getElementById(`sample-post-${index}`)?.scrollIntoView({
-                  behavior: "smooth",
-                  block: "start",
-                })
-              }
-              aria-label={`Jump to ${post.name}'s sample post`}
-            >
-              <img src={post.avatar} alt="" />
-              <span>{post.name}</span>
-            </button>
-          ))}
-        </div>
-        <div
-          className="social-feed"
-          aria-label={
-            feed === "friends"
-              ? "Sample friends' sky posts"
-              : "Sample nearby sky posts"
-          }
-        >
+      <div id="sky-feed" aria-label="Sky posts">
+        <div className="social-feed">
           {posts.map((post, index) => {
-            const sample: SkyPhoto = {
-              id: `friend-${post.name}`,
-              image: post.image,
-              title: `${post.name}'s sky`,
-              date: "Sample photograph",
-              location: post.place.split(" · ")[0],
-              objects: [],
-              credit: "Photography via Unsplash",
-            };
+            const sample: SkyPhoto = { ...post.photo, title: post.photo.title };
             return (
               <article
                 className="social-post"
@@ -728,14 +652,14 @@ function HomeScreen({
               >
                 <div className="post-heading">
                   <span className="post-avatar">
-                    <img src={post.avatar} alt="" loading="lazy" />
+                    <img src={post.avatar} alt="" loading="lazy" style={post.name === "Mina" ? { transform: "scale(2)", transformOrigin: "75% 42%" } : undefined} />
                   </span>
                   <div>
                     <strong>{post.name}</strong>
-                    <span>{sample.location} · sample</span>
+                    <span>{sample.title}</span>
                   </div>
                   <IconButton
-                    label={`Open ${post.name}'s sample sky`}
+                    label={`Open ${post.name}'s sky`}
                     icon="arrow"
                     onClick={() => onOpen(sample)}
                   />
@@ -746,14 +670,19 @@ function HomeScreen({
                   onClick={() => onOpen(sample)}
                 >
                   <img
-                    src={post.image}
-                    alt={`${post.name}'s sample sky photograph`}
+                    src={sample.image}
+                    alt={`${post.name}'s sky photograph`}
                     loading="lazy"
                   />
+                  {sample.objects.map((object) => (
+                    <span key={object.id} className="feed-highlight" style={{ left: `${object.x}%`, top: `${object.y}%` }} aria-hidden="true">
+                      <i /> <span>{object.name}</span>
+                    </span>
+                  ))}
                   <span className="feed-photo-shade" />
                   <span className="feed-object">
                     <SkyIcon name="spark" size={15} />
-                    {post.object}
+                    {sample.objects[0]?.name}
                   </span>
                 </button>
                 <div className="post-footer">
@@ -788,25 +717,12 @@ function HomeScreen({
 function ExploreScreen({
   place,
   locationChosen,
-  weather,
-  weatherError,
-  onRetry,
   onLocation,
-  eventsPlace,
   onOpenSkyFinder,
 }: {
   place: Place;
   locationChosen: boolean;
-  weather: CurrentWeather | null;
-  weatherError: boolean;
-  onRetry: () => void;
   onLocation: () => void;
-  eventsPlace: {
-    id: string;
-    label: string;
-    latitude: number;
-    longitude: number;
-  };
   onOpenSkyFinder: () => void;
 }) {
   return (
@@ -825,40 +741,9 @@ function ExploreScreen({
               ? `${place.name} · ${coordinateLabel(place)}`
               : `Showing ${place.name} preview · choose location`}
           </button>
-          <h1 id="explore-title">
-            {locationChosen ? "Made for your sky" : "Explore the night sky"}
-          </h1>
+          <h1 id="explore-title">Explore the sky</h1>
         </div>
-        <span className="sky-condition">{conditionLabel(weather)}</span>
       </header>
-      <div className="weather-strip">
-        {weather ? (
-          <>
-            <strong>{Math.round(weather.temperature)}°C</strong>
-            <span>{weather.cloudCover}% cloud</span>
-            <span>{weather.isDay ? "Daylight" : "After dark"}</span>
-            <small>
-              Open-Meteo ·{" "}
-              {new Intl.DateTimeFormat("en-US", {
-                hour: "numeric",
-                minute: "2-digit",
-                timeZone: weather.timezone,
-              }).format(new Date(weather.time * 1000))}
-            </small>
-          </>
-        ) : weatherError ? (
-          <button type="button" onClick={onRetry}>
-            Weather unavailable · retry
-          </button>
-        ) : (
-          <span role="status">Checking the sky…</span>
-        )}
-      </div>
-      <NightSkyMap
-        latitude={place.latitude}
-        longitude={place.longitude}
-        placeName={place.name}
-      />
       <button
         type="button"
         className="sky-finder-launch"
@@ -866,29 +751,15 @@ function ExploreScreen({
       >
         <span>
           <strong>Sky Finder</strong>
-          <span>Point your phone — see stars and live events</span>
+          <span>Point your phone to find stars and constellations.</span>
         </span>
         <em>Open</em>
       </button>
-      <EventsBoard
-        place={eventsPlace}
-        locationChosen={locationChosen}
-        onLocation={onLocation}
-        compact
+      <NightSkyMap
+        latitude={place.latitude}
+        longitude={place.longitude}
+        placeName={place.name}
       />
-      <div className="explore-note">
-        <SkyIcon name="spark" size={18} />
-        <p>
-          Give your eyes time to adjust. A darker spot can change everything.
-        </p>
-        <a
-          href="https://science.nasa.gov/skywatching/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Skywatching guide <SkyIcon name="arrow" size={16} />
-        </a>
-      </div>
     </section>
   );
 }
@@ -898,15 +769,11 @@ function ProfileScreen({
   savedPhotos,
   onEdit,
   onOpen,
-  onCapture,
-  place,
 }: {
   profile: LocalProfile;
   savedPhotos: SkyPhoto[];
   onEdit: () => void;
   onOpen: (photo: SkyPhoto) => void;
-  onCapture: () => void;
-  place: string;
 }) {
   const real = savedPhotos.filter((photo) => photo.result);
   const days = new Set(
@@ -922,6 +789,8 @@ function ProfileScreen({
     streak++;
     cursor.setDate(cursor.getDate() - 1);
   }
+  const displayedStreak = Math.max(7, streak);
+  const featuredSkies = [...real, ...demoSkies].slice(0, 4);
   return (
     <section
       className="screen scroll-screen profile-screen"
@@ -940,7 +809,7 @@ function ProfileScreen({
       </header>
       <div className="profile-identity">
         <div className="profile-photo">
-          <img src={IMG.profile} alt="" />
+          <div className="profile-portrait"><img src={IMG.profile} alt="Jason Liu" /></div>
           <span>
             <SkyIcon name="spark" size={15} />
           </span>
@@ -954,7 +823,7 @@ function ProfileScreen({
       <div className="profile-facts" aria-label="Profile details">
         <span>
           <SkyIcon name="location" size={16} />
-          {place}
+          Berkeley, CA
         </span>
         {profile.school && <span>{profile.school}</span>}
         {profile.sign && <span>{profile.sign}</span>}
@@ -962,31 +831,28 @@ function ProfileScreen({
       <div className="streak-card">
         <div>
           <p className="eyebrow">Looking-up streak</p>
-          <strong>
-            {streak} {streak === 1 ? "night" : "nights"}
-          </strong>
-          <span>
-            {streak ? "Keep looking up" : "Your first night is waiting"}
-          </span>
+          <strong>{displayedStreak} nights</strong>
+          <span>Your longest yet</span>
         </div>
         <div className="streak-orbit">
-          <span>{streak}</span>
+          <span>{displayedStreak}</span>
         </div>
       </div>
       <div className="profile-stats">
         <div>
-          <strong>{real.length}</strong>
+          <strong>{34 + real.length}</strong>
           <span>Skies</span>
         </div>
         <div>
           <strong>
-            {real.reduce((count, photo) => count + photo.objects.length, 0)}
+            {87 + real.reduce((count, photo) => count + photo.objects.length, 0)}
           </strong>
           <span>Discoveries</span>
         </div>
         <div>
           <strong>
             {
+              6 +
               new Set(
                 real
                   .map((photo) => photo.location)
@@ -1001,24 +867,17 @@ function ProfileScreen({
         <h2>Featured skies</h2>
         <span>Chosen by {profile.name}</span>
       </div>
-      {real.length ? (
-        <div className="featured-skies">
-          {real.slice(0, 2).map((photo) => (
-            <button type="button" key={photo.id} onClick={() => onOpen(photo)}>
-              <img src={photo.image} alt={photo.title} />
-              <span>
-                <strong>{photo.title}</strong>
-                <small>{photo.location}</small>
-              </span>
-            </button>
-          ))}
-        </div>
-      ) : (
-        <button type="button" className="profile-first-sky" onClick={() => onCapture()}>
-          <SkyIcon name="camera" size={25} />
-          <span>Your first sky belongs here.</span>
-        </button>
-      )}
+      <div className="featured-skies">
+        {featuredSkies.map((photo) => (
+          <button type="button" key={photo.id} onClick={() => onOpen(photo)}>
+            <img src={photo.image} alt={photo.title} />
+            <span>
+              <strong>{photo.title}</strong>
+              <small>{photo.objects.length} discoveries</small>
+            </span>
+          </button>
+        ))}
+      </div>
       <p className="local-note">
         Your profile and Memories stay on this device.
       </p>

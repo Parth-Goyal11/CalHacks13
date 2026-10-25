@@ -336,9 +336,19 @@ export default function NightSkyMap({
         {error
           ? error
           : polaris
-            ? `Polaris is ${polaris.alt.toFixed(0)}° up. That height is this latitude. Heading 0 faces true north.`
-            : "Heading 0 faces true north. Lens height 0 is the horizon."}
+            ? `Polaris is ${polaris.alt.toFixed(0)}° above the horizon. Tap a star to learn more.`
+            : "Tap a star to learn more. Use the sliders to look around."}
       </p>
+      <div className="night-sky-actions">
+        <button type="button" onClick={() => void (follow ? setFollow(false) : attitude.requestPermission().then(setFollow))}>
+          {follow ? "Use manual controls" : "Follow my phone"}
+        </button>
+        <button type="button" onClick={() => void toggleCamera()}>
+          {cameraOn ? "Turn camera off" : "Turn camera on"}
+        </button>
+      </div>
+      <details className="night-sky-manual">
+        <summary>Adjust view manually</summary>
       <div className="night-sky-aim">
         <label>
           Heading {Math.round(aimHeading)}°
@@ -354,7 +364,7 @@ export default function NightSkyMap({
           />
         </label>
         <label>
-          Lens height {Math.round(aimTilt)}°
+          Altitude {Math.round(aimTilt)}°
           <input
             type="range"
             min={0}
@@ -377,7 +387,7 @@ export default function NightSkyMap({
           />
         </label>
         <label>
-          Lens width {fov}°
+          Field of view {fov}°
           <input
             type="range"
             min={35}
@@ -387,14 +397,7 @@ export default function NightSkyMap({
           />
         </label>
       </div>
-      <div className="night-sky-actions">
-        <button type="button" onClick={() => void (follow ? setFollow(false) : attitude.requestPermission().then(setFollow))}>
-          {follow ? "Use the sliders" : "Turn with the phone"}
-        </button>
-        <button type="button" onClick={() => void toggleCamera()}>
-          {cameraOn ? "Hide the camera" : "Show the sky behind the names"}
-        </button>
-      </div>
+      </details>
       {selected ? (
         <dl className="night-sky-card">
           <div>
