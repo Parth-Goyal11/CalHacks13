@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   transpilePackages: ["@calhacks13/lib"],
-  serverExternalPackages: ["satellite.js", "astronomy-engine"],
+  serverExternalPackages: ["satellite.js"],
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {
