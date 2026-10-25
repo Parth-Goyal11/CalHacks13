@@ -44,3 +44,5 @@ __pycache__/
 data/photos/*.json
 data/photos/*_annotated.jpg
 !data/photos/.gitkeep
+.vercel
+.env*

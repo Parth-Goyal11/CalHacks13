@@ -30,7 +30,7 @@ export default function BottomNav({
         className="nav-capture"
         type="button"
         aria-label="Capture the sky"
-        onClick={onCapture}
+        onClick={() => onCapture()}
       >
         <SkyIcon name="camera" size={27} />
       </button>

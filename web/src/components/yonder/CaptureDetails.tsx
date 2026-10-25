@@ -26,23 +26,21 @@ export default function CaptureDetails({ draft, onChange, error }: { draft: Capt
   return <section className="capture-details" aria-label="Photo location and time">
     <h2>Where was your sky?</h2>
     <p>Confirm the photo’s location and time. For older photos, enter where and when you took them.</p>
-    {draft.notes && <p className="capture-target-note">Looking for <strong>{draft.notes}</strong></p>}
+    {typeof draft.notes === "string" && draft.notes ? <p className="capture-target-note">Looking for <strong>{draft.notes}</strong></p> : null}
     <button type="button" disabled={locating} onClick={locate}>{locating ? "Finding location…" : "Use current location"}</button>
-    {geoError && <p role="alert">{geoError}</p>}
+    {geoError ? <p role="alert">{geoError}</p> : null}
     <div className="capture-fields">
       <label>Latitude<input inputMode="decimal" type="number" min="-90" max="90" value={draft.latitude} onChange={(e) => field("latitude", e.target.value)} /></label>
       <label>Longitude<input inputMode="decimal" type="number" min="-180" max="180" value={draft.longitude} onChange={(e) => field("longitude", e.target.value)} /></label>
     </div>
     <label>Time taken · your device’s time zone<input type="datetime-local" value={draft.takenAt} onChange={(e) => field("takenAt", e.target.value)} /></label>
-    <details><summary>Camera direction & notes · optional</summary>
-      <p>Leave direction blank if unknown. We assume about 40° elevation and a 70° field of view when omitted.</p>
-      <div className="capture-fields">
-        <label>Facing ° · 0 north<input type="number" min="0" max="360" placeholder="Unknown" value={draft.facing} onChange={(e) => field("facing", e.target.value)} /></label>
-        <label>Elevation °<input type="number" min="0" max="90" placeholder="40" value={draft.elevation} onChange={(e) => field("elevation", e.target.value)} /></label>
-        <label>Field of view °<input type="number" min="1" max="180" placeholder="70" value={draft.fov} onChange={(e) => field("fov", e.target.value)} /></label>
-      </div>
-      <label>Notes<textarea rows={2} value={draft.notes} onChange={(e) => field("notes", e.target.value)} /></label>
-    </details>
-    {error && <p className="capture-detail-error" role="alert">{error}</p>}
+    <p>Direction is optional. Leave it blank if you do not know it. We assume about 40° elevation and a 70° field of view when omitted.</p>
+    <div className="capture-fields">
+      <label>Facing ° · 0 north<input type="number" min="0" max="360" placeholder="Unknown" value={draft.facing} onChange={(e) => field("facing", e.target.value)} /></label>
+      <label>Elevation °<input type="number" min="0" max="90" placeholder="40" value={draft.elevation} onChange={(e) => field("elevation", e.target.value)} /></label>
+      <label>Field of view °<input type="number" min="1" max="180" placeholder="70" value={draft.fov} onChange={(e) => field("fov", e.target.value)} /></label>
+    </div>
+    <label>Notes<textarea rows={2} value={typeof draft.notes === "string" ? draft.notes : ""} onChange={(e) => field("notes", e.target.value)} /></label>
+    {typeof error === "string" && error ? <p className="capture-detail-error" role="alert">{error}</p> : null}
   </section>;
 }

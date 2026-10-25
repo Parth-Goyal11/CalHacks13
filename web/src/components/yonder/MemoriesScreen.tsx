@@ -34,7 +34,7 @@ export default function MemoriesScreen({
             <button
               type="button"
               aria-label="Add another sky photo"
-              onClick={onCapture}
+              onClick={() => onCapture()}
             >
               <SkyIcon name="plus" size={20} />
             </button>
@@ -66,7 +66,7 @@ export default function MemoriesScreen({
           </span>
           <h2>No sky photos yet</h2>
           <p>Your saved photos and celestial discoveries will gather here.</p>
-          <button type="button" onClick={onCapture}>
+          <button type="button" onClick={() => onCapture()}>
             Capture the sky
           </button>
         </div>
