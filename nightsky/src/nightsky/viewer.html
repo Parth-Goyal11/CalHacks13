@@ -162,7 +162,27 @@
     .aim { display: grid; gap: 8px; margin-top: 12px; }
     .aim label { font-size: 14px; }
     input[type="range"] { padding: 0; accent-color: var(--amber); }
-    #live[hidden], #still[hidden] { display: none; }
+    #held-photo, #held-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #held-photo { object-fit: cover; z-index: 0; }
+    #held-overlay { object-fit: fill; z-index: 1; pointer-events: none; }
+    #shutter-bar {
+      position: absolute;
+      z-index: 3;
+      left: 12px;
+      right: 12px;
+      bottom: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    #shutter-bar button { background: rgba(10, 14, 22, 0.88); }
+    #live[hidden], #still[hidden], #held-photo[hidden], #held-overlay[hidden], #shutter-bar[hidden] { display: none; }
     @media (max-width: 800px) {
       main { grid-template-columns: 1fr; }
       h1 { font-size: 32px; }
@@ -183,7 +203,15 @@
         <div id="viewport" class="viewport">
           <video id="camera" playsinline autoplay muted></video>
           <canvas id="skyphoto" aria-label="Drawn sky for this direction"></canvas>
+          <img id="held-photo" alt="Camera photo without names" hidden>
+          <img id="held-overlay" alt="" hidden>
           <canvas id="chart"></canvas>
+          <div id="shutter-bar" hidden>
+            <button id="take-photo" type="button">Take a photo</button>
+            <button id="save-photo" type="button" hidden>Save photo</button>
+            <button id="toggle-labels" type="button" hidden>Hide names</button>
+            <button id="retake-photo" type="button" hidden>Back to the camera</button>
+          </div>
           <aside id="detail" hidden>
             <button id="detail-close" type="button">Close</button>
             <h2 id="detail-name"></h2>
@@ -216,7 +244,7 @@
           <button id="follow" class="primary" type="button">Hold the phone to the sky</button>
           <p class="hint">The photograph, the constellation lines, and the names turn as you turn the phone. North comes from the compass, corrected to true north. Tip the phone flat once if north feels off, or wave it in a figure-eight. The browser asks to use motion sensors, then the rear camera. If you decline the camera, the photograph keeps turning. Tap again to go back to the sliders.</p>
           <button id="open-camera" type="button">Show the sky behind the names</button>
-          <p class="hint">Turns on the rear camera and leaves the names drawn on top of it, so stars through the lens can line up with the marks. The sky photograph returns when the camera is hidden. The browser asks to use the camera. Tap again to hide it.</p>
+          <p class="hint">Turns on the rear camera and leaves the names drawn on top of it, so stars through the lens can line up with the marks. Take a photo to hold that view. The names can stay on the screen. Save photo writes the camera picture alone, without the names. The browser asks to use the camera. Tap again to hide it.</p>
           <button id="scan" class="primary" type="button">Scan this photo</button>
           <p class="hint">Names the stars in that picture. The heading is not used. The result is the same plate solve as a scan with no aim.</p>
         </div>
@@ -266,6 +294,10 @@
     let userAimed = false;
     let followPhone = false;
     let cameraOn = false;
+    let photoHold = false;
+    let labelsOnPhoto = true;
+    let cleanPhotoUrl = null;
+    let cleanPhotoBlob = null;
     let applying = false;
     let chartLoading = false;
     let skyError = "";
@@ -633,6 +665,7 @@
     }
 
     function drawChart() {
+      if (photoHold) return;
       resizeChart();
       const aim = aimNow();
       const context = canvas.getContext("2d");
@@ -1019,6 +1052,92 @@
       applyOrientation(lastOrientation);
     }
 
+    function releaseCleanPhoto() {
+      if (cleanPhotoUrl) URL.revokeObjectURL(cleanPhotoUrl);
+      cleanPhotoUrl = null;
+      cleanPhotoBlob = null;
+    }
+
+    function endPhotoHold() {
+      photoHold = false;
+      labelsOnPhoto = true;
+      const held = document.querySelector("#held-photo");
+      const overlay = document.querySelector("#held-overlay");
+      held.hidden = true;
+      held.removeAttribute("src");
+      overlay.hidden = true;
+      overlay.removeAttribute("src");
+      video.hidden = false;
+      canvas.hidden = false;
+      document.querySelector("#take-photo").hidden = false;
+      document.querySelector("#save-photo").hidden = true;
+      document.querySelector("#toggle-labels").hidden = true;
+      document.querySelector("#toggle-labels").textContent = "Hide names";
+      document.querySelector("#retake-photo").hidden = true;
+      releaseCleanPhoto();
+    }
+
+    function syncShutter() {
+      document.querySelector("#shutter-bar").hidden = !cameraOn;
+      if (!cameraOn) endPhotoHold();
+    }
+
+    async function takePhoto() {
+      if (!cameraOn || !video.videoWidth) {
+        skyStatus.textContent = "The camera has not started yet.";
+        return;
+      }
+      const shot = document.createElement("canvas");
+      shot.width = video.videoWidth;
+      shot.height = video.videoHeight;
+      shot.getContext("2d").drawImage(video, 0, 0);
+      const blob = await new Promise((resolve) => shot.toBlob(resolve, "image/jpeg", 0.92));
+      if (!blob) {
+        skyStatus.textContent = "The photo could not be taken.";
+        return;
+      }
+      releaseCleanPhoto();
+      cleanPhotoBlob = blob;
+      cleanPhotoUrl = URL.createObjectURL(blob);
+      const held = document.querySelector("#held-photo");
+      held.src = cleanPhotoUrl;
+      held.hidden = false;
+      video.hidden = true;
+      const overlay = document.querySelector("#held-overlay");
+      overlay.src = canvas.toDataURL("image/png");
+      overlay.hidden = false;
+      labelsOnPhoto = true;
+      canvas.hidden = true;
+      photoHold = true;
+      document.querySelector("#take-photo").hidden = true;
+      document.querySelector("#save-photo").hidden = false;
+      document.querySelector("#toggle-labels").hidden = false;
+      document.querySelector("#toggle-labels").textContent = "Hide names";
+      document.querySelector("#retake-photo").hidden = false;
+      skyStatus.textContent = "The names stay on this view. Save photo keeps the camera picture alone.";
+    }
+
+    async function savePhoto() {
+      if (!cleanPhotoBlob || !cleanPhotoUrl) return;
+      const stamp = (document.querySelector("#taken_at").value || "night-sky").replace(/[:T]/g, "-");
+      const name = `night-sky-${stamp}.jpg`;
+      const file = new File([cleanPhotoBlob], name, { type: "image/jpeg" });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file] });
+          skyStatus.textContent = "The saved photo is the camera picture alone.";
+          return;
+        }
+      } catch (error) {
+        if (error && error.name === "AbortError") return;
+      }
+      const link = document.createElement("a");
+      link.href = cleanPhotoUrl;
+      link.download = name;
+      link.click();
+      skyStatus.textContent = "The saved photo is the camera picture alone.";
+    }
+
     async function startRearCamera() {
       if (cameraOn || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
       try {
@@ -1030,6 +1149,7 @@
         skyPhoto.classList.remove("on");
         document.querySelector("#open-camera").classList.add("primary");
         document.querySelector("#open-camera").textContent = "Hide the camera";
+        syncShutter();
         video.onloadedmetadata = () => {
           if (video.videoWidth) document.querySelector("#viewport").style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
         };
@@ -1045,6 +1165,7 @@
       cameraOn = false;
       document.querySelector("#open-camera").classList.remove("primary");
       document.querySelector("#open-camera").textContent = "Show the sky behind the names";
+      syncShutter();
     }
 
     document.querySelector("#follow").addEventListener("click", async () => {
@@ -1104,6 +1225,7 @@
         cameraOn = false;
         document.querySelector("#open-camera").classList.remove("primary");
         document.querySelector("#open-camera").textContent = "Show the sky behind the names";
+        syncShutter();
         drawChart();
         return;
       }
@@ -1117,12 +1239,26 @@
         skyPhoto.classList.remove("on");
         document.querySelector("#open-camera").classList.add("primary");
         document.querySelector("#open-camera").textContent = "Hide the camera";
+        syncShutter();
         video.onloadedmetadata = () => {
           if (video.videoWidth) document.querySelector("#viewport").style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
         };
       } catch (error) {
         skyStatus.textContent = "The camera stayed closed. The names are still on the map.";
       }
+    });
+
+    document.querySelector("#take-photo").addEventListener("click", () => takePhoto());
+    document.querySelector("#save-photo").addEventListener("click", () => savePhoto());
+    document.querySelector("#retake-photo").addEventListener("click", () => {
+      endPhotoHold();
+      skyStatus.textContent = "The camera is live again. The names stay on the screen.";
+      drawChart();
+    });
+    document.querySelector("#toggle-labels").addEventListener("click", () => {
+      labelsOnPhoto = !labelsOnPhoto;
+      document.querySelector("#held-overlay").hidden = !labelsOnPhoto;
+      document.querySelector("#toggle-labels").textContent = labelsOnPhoto ? "Hide names" : "Show names";
     });
 
     document.querySelector("#scan").addEventListener("click", async () => {
@@ -1197,7 +1333,7 @@
     }
 
     function tick() {
-      if (!document.querySelector("#live").hidden) drawChart();
+      if (!document.querySelector("#live").hidden && !photoHold) drawChart();
       requestAnimationFrame(tick);
     }
 

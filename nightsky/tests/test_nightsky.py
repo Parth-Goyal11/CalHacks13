@@ -802,6 +802,9 @@ def test_viewer_page_and_file_guard():
         assert "this season" in page
         assert "stretched photograph" in page
         assert "Scan this photo" in page
+        assert "Take a photo" in page
+        assert "Save photo" in page
+        assert "camera picture alone" in page
         assert "Upload a photo" not in page
         assert "north of the equator" in page
         assert "east of Greenwich" in page
