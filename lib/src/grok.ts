@@ -22,8 +22,8 @@ export const grok = {
   /** Fast non-reasoning default for demos. */
   modelId: "grok-4.20-0309-non-reasoning" as const,
   visionModelId: "grok-4.20-0309-non-reasoning" as const,
-  /** Grok Imagine image model in this SDK. */
-  imageModelId: "grok-2-image" as const,
+  /** Current Grok Imagine image model. grok-2-image is no longer served. */
+  imageModelId: "grok-imagine-image" as const,
 
   async chat(messages: CoreMessage[], options?: { model?: string; system?: string }) {
     const xai = createGrokClient();
