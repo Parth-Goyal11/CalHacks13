@@ -92,8 +92,5 @@ Recorded-response vision tests do not call the network.
 
 ## Tracks
 
-- **SpaceXAI** — Cursor + Grok (vision judge + `lib/` client); Imagine/Voice where useful  
-- **Elastic** — Jina embeddings, Agent Builder, Workflows on Cloud Serverless  
-- **Spacetime** — SpacetimeDB as the live game backend  
-
+- **SpaceXAI** — Cursor + Grok (vision judge + `lib/` client);
 See `.cursorrules` for conventions.
