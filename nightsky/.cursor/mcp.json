@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "brightdata": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@brightdata/mcp"
+      ],
+      "env": {
+        "API_TOKEN": "${env:BRIGHTDATA_API_TOKEN}",
+        "GROUPS": "advanced_scraping",
+        "WEB_UNLOCKER_ZONE": "mcp_unlocker"
+      }
+    }
+  }
+}

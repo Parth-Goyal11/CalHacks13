@@ -16,6 +16,7 @@ Sky Photo (plate-solve → measure → **xAI Grok** judge → coded score) lives
 |------|------|
 | `web/` | Next.js + Tailwind: Yonder Home, Explore, camera, Memories, Profile; proxies `/api/sky-photo` |
 | `sky_photo/` | FastAPI service: ingest → OpenCV metrics → Astrometry.net → Grok vision → `score.py` → annotated overlay |
+| `nightsky/` | Local Hipparcos plate solver. Names a star only when the pattern matches one catalog sky. Run from that folder. |
 | `ingest/` | Pull space-event data → Elasticsearch |
 | `spacetime/` | SpacetimeDB real-time backend (placeholder) |
 | `lib/` | Shared xAI Grok client (`ai` + `@ai-sdk/xai`) |
@@ -97,3 +98,16 @@ Recorded-response vision tests do not call the network.
 - **Spacetime** — SpacetimeDB as the live game backend  
 
 See `.cursorrules` for conventions.
+
+## Night-sky catalog solver
+
+`nightsky/` is the local identifier: Hipparcos stars, CelesTrak satellites, and a plate solver that labels a photo from the star pattern. It does not replace the Yonder camera flow. From `nightsky/`:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+python -m nightsky serve
+```
+
+The viewer listens on port 8741. Copy `nightsky/.env.example` to `nightsky/.env` for the Bright Data token. That file stays untracked.

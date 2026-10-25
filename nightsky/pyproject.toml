@@ -1,0 +1,27 @@
+[project]
+name = "nightsky"
+version = "0.1.0"
+description = "Identify stars, planets, and satellites in a night-sky photo from a local catalog."
+requires-python = ">=3.11"
+dependencies = [
+  "psycopg[binary]>=3.2",
+  "skyfield>=1.49",
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "pillow>=10.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+nightsky = "nightsky.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nightsky = ["viewer.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

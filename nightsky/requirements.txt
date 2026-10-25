@@ -1,0 +1,6 @@
+psycopg[binary]>=3.2
+skyfield>=1.49
+pandas>=2.2
+numpy>=1.26
+pillow>=10.0
+pytest>=8.0

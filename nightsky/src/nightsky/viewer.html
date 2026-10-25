@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Night sky</title>
+  <style>
+    :root {
+      --bg: #12151c;
+      --panel: #1b212c;
+      --line: #313a4a;
+      --text: #f3efe6;
+      --muted: #a8b0bd;
+      --amber: #e2b15a;
+      --danger: #e07a68;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font: 16px/1.45 "Avenir Next", "Segoe UI", sans-serif;
+    }
+    header, main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; }
+    header { padding: 28px 0 8px; }
+    .kicker {
+      margin: 0;
+      color: var(--amber);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-size: 12px;
+    }
+    h1 { margin: 6px 0 8px; font-family: Palatino, "Iowan Old Style", Georgia, serif; font-size: 40px; font-weight: 500; }
+    .lede, .meta { color: var(--muted); max-width: 62ch; }
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+      gap: 20px;
+      padding-bottom: 40px;
+    }
+    .stage, aside {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+    button, .file {
+      border: 1px solid var(--line);
+      background: #12161e;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 14px;
+      font: inherit;
+    }
+    button.active, button.primary { background: var(--amber); color: #1b1408; border-color: var(--amber); }
+    button:disabled { opacity: 0.6; }
+    figure { margin: 0; }
+    img {
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      background: #05070c;
+      display: block;
+    }
+    .switch { display: flex; gap: 8px; margin-top: 10px; }
+    #status { min-height: 1.4em; color: var(--muted); }
+    #status.error { color: var(--danger); }
+    form { display: grid; gap: 10px; margin-bottom: 16px; }
+    label { display: grid; gap: 4px; color: var(--muted); font-size: 14px; }
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #12161e;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font: inherit;
+    }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .note, .hint { color: var(--muted); font-size: 14px; margin: 0; }
+    .hint { font-size: 13px; line-height: 1.35; }
+    dl { display: grid; grid-template-columns: 9.5rem 1fr; gap: 6px 10px; margin: 0 0 14px; }
+    dt { color: var(--muted); }
+    dd { margin: 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 500; }
+    .scroll { max-height: 420px; overflow: auto; }
+    @media (max-width: 800px) {
+      main { grid-template-columns: 1fr; }
+      h1 { font-size: 32px; }
+      .pair { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p class="kicker">Local catalog</p>
+    <h1>Night sky</h1>
+    <p class="lede">This page shows the plate solve. Circles are catalog objects projected onto the picture. The Orion field is the known-good test. An upload runs the same solver on your file.</p>
+    <p id="catalog" class="meta">Loading the catalog…</p>
+  </header>
+  <main>
+    <section class="stage">
+      <div class="tabs">
+        <button id="tab-demo" class="active" type="button">Orion demo</button>
+        <button id="tab-upload" type="button">Upload a photo</button>
+      </div>
+      <figure>
+        <img id="sky" alt="Night-sky field">
+        <div class="switch">
+          <button id="show-labeled" class="active" type="button">With labels</button>
+          <button id="show-plain" type="button">Pixels only</button>
+        </div>
+        <p id="status"></p>
+      </figure>
+    </section>
+    <aside>
+      <form id="upload" hidden>
+        <label>Photo
+          <input id="photo" name="photo" type="file" accept="image/*">
+        </label>
+        <label>Time, UTC, to the minute
+          <input id="taken_at" name="taken_at" type="datetime-local">
+        </label>
+        <div class="pair">
+          <label>Latitude
+            <input id="latitude" name="latitude" inputmode="decimal" placeholder="37.7749">
+            <span class="hint">Decimal degrees from −90 to 90. Positive is north of the equator, negative is south. San Francisco is 37.77.</span>
+          </label>
+          <label>Longitude
+            <input id="longitude" name="longitude" inputmode="decimal" placeholder="-122.4194">
+            <span class="hint">Decimal degrees from −180 to 180. Positive is east of Greenwich, negative is west. San Francisco is −122.42.</span>
+          </label>
+        </div>
+        <p class="note">Choosing a photo from the camera roll fills the time and the GPS fix when the file has them. This browser can also fill latitude and longitude from the device location. A camera clock has no time zone, so that time is read as UTC. Each star-like point is named on its own. The picture is darkened so those points stand out from the sky.</p>
+        <button id="solve" class="primary" type="submit">Solve this photo</button>
+      </form>
+      <div id="solution"></div>
+      <div id="matches" class="scroll"></div>
+    </aside>
+  </main>
+  <script>
+    const sky = document.querySelector("#sky");
+    const status = document.querySelector("#status");
+    const catalog = document.querySelector("#catalog");
+    const solution = document.querySelector("#solution");
+    const matches = document.querySelector("#matches");
+    const form = document.querySelector("#upload");
+    const showLabeled = document.querySelector("#show-labeled");
+    const showPlain = document.querySelector("#show-plain");
+    let current = null;
+    let labeled = true;
+
+    function setStatus(text, isError) {
+      status.textContent = text || "";
+      status.className = isError ? "error" : "";
+    }
+
+    function showImage() {
+      if (!current) return;
+      sky.src = labeled ? current.labeled_url : current.image_url;
+      sky.alt = labeled ? "Field with catalog labels" : "Field without labels";
+    }
+
+    function fmt(value, digits) {
+      if (value === null || value === undefined || value === "") return "—";
+      const number = Number(value);
+      if (Number.isNaN(number)) return String(value);
+      return number.toFixed(digits);
+    }
+
+    function render(data) {
+      current = data;
+      showImage();
+      if (!data.ok) {
+        setStatus(data.error || "The solve failed.", true);
+      } else {
+        const named = (data.identifications || []).filter((row) => row.object_type === "star" && (row.confidence || 0) >= 0.9).length;
+        const resized = data.resized ? " The long edge was reduced to 1400 pixels." : "";
+        setStatus(`${named} individual stars are named.${resized}`);
+      }
+      const solve = data.solve;
+      const rows = [
+        ["Center right ascension", solve ? `${fmt(solve.center_ra_deg, 3)}°` : "—"],
+        ["Center declination", solve ? `${fmt(solve.center_dec_deg, 3)}°` : "—"],
+        ["Pixel scale", solve ? `${fmt(solve.pixel_scale_arcsec, 2)} arcsec/pixel` : "—"],
+        ["Rotation", solve ? `${fmt(solve.rotation_deg, 2)}°` : "—"],
+        ["Frame", data.width ? `${data.width} × ${data.height}` : "—"],
+        ["Peaks", String(data.detections ?? "—")],
+        ["When", data.taken_at ? data.taken_at.replace("T", " ").replace("+00:00", " UTC").replace(/(\d{2}:\d{2}):\d{2}/, "$1") : "—"],
+        ["Where", data.latitude == null ? "—" : `${fmt(data.latitude, 3)}, ${fmt(data.longitude, 3)}`]
+      ];
+      solution.replaceChildren();
+      const list = document.createElement("dl");
+      for (const [name, value] of rows) {
+        const term = document.createElement("dt");
+        term.textContent = name;
+        const detail = document.createElement("dd");
+        detail.textContent = value;
+        list.append(term, detail);
+      }
+      solution.append(list);
+      if (data.hints && data.hints.time_assumed_utc) {
+        const note = document.createElement("p");
+        note.className = "note";
+        note.textContent = "The camera timestamp had no time zone, so it was treated as UTC.";
+        solution.append(note);
+      }
+
+      const found = data.identifications || [];
+      const visible = found.filter((row) => row.name && (row.confidence || 0) >= 0.9);
+      matches.replaceChildren();
+      if (!data.ok) {
+        const note = document.createElement("p");
+        note.className = "note";
+        note.textContent = "No catalog star was close enough to name. Nothing on the photo was labeled.";
+        matches.append(note);
+        return;
+      }
+      const table = document.createElement("table");
+      const head = document.createElement("tr");
+      for (const label of ["Object", "Kind", "Separation"]) {
+        const cell = document.createElement("th");
+        cell.textContent = label;
+        head.append(cell);
+      }
+      table.append(head);
+      const body = visible.slice(0, 80);
+      for (const row of body) {
+        const line = document.createElement("tr");
+        for (const value of [row.name || row.catalog_id, row.object_type, row.separation_arcsec == null ? "—" : `${fmt(row.separation_arcsec, 1)}″`]) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          line.append(cell);
+        }
+        table.append(line);
+      }
+      matches.append(table);
+      if (visible.length > body.length || visible.some((row) => row.object_type === "star" && row.name.startsWith("HIP "))) {
+        const more = document.createElement("p");
+        more.className = "note";
+        more.textContent = `${visible.length} objects are labeled. A star with no common name is marked with its Hipparcos number.`;
+        matches.append(more);
+      }
+    }
+
+    async function loadDemo() {
+      setStatus("Loading the Orion solve…");
+      const response = await fetch("/api/demo");
+      const data = await response.json();
+      if (data.catalog) {
+        catalog.textContent = `${data.catalog.stars.toLocaleString()} Hipparcos stars and ${data.catalog.satellites.toLocaleString()} satellites are loaded.`;
+      }
+      render(data);
+    }
+
+    document.querySelector("#tab-demo").addEventListener("click", () => {
+      document.querySelector("#tab-demo").classList.add("active");
+      document.querySelector("#tab-upload").classList.remove("active");
+      form.hidden = true;
+      loadDemo();
+    });
+    document.querySelector("#tab-upload").addEventListener("click", () => {
+      document.querySelector("#tab-upload").classList.add("active");
+      document.querySelector("#tab-demo").classList.remove("active");
+      form.hidden = false;
+      setStatus("Choose a photo. The Orion result stays up until you solve.");
+      fillDeviceLocation();
+    });
+    document.querySelector("#photo").addEventListener("change", async () => {
+      const file = document.querySelector("#photo").files[0];
+      if (!file) return;
+      const body = new FormData();
+      body.append("photo", file);
+      try {
+        const hints = await fetch("/api/hints", { method: "POST", body }).then((response) => response.json());
+        if (hints.taken_at) document.querySelector("#taken_at").value = hints.taken_at.slice(0, 16);
+        if (hints.latitude != null) document.querySelector("#latitude").value = Number(hints.latitude).toFixed(5);
+        if (hints.longitude != null) document.querySelector("#longitude").value = Number(hints.longitude).toFixed(5);
+      } catch (error) {
+        setStatus("The photo's time and location could not be read.", true);
+      }
+    });
+    function fillDeviceLocation() {
+      if (!navigator.geolocation) return;
+      navigator.geolocation.getCurrentPosition((position) => {
+        const latitude = document.querySelector("#latitude");
+        const longitude = document.querySelector("#longitude");
+        if (!latitude.value) latitude.value = position.coords.latitude.toFixed(5);
+        if (!longitude.value) longitude.value = position.coords.longitude.toFixed(5);
+      });
+    }
+    showLabeled.addEventListener("click", () => {
+      labeled = true;
+      showLabeled.classList.add("active");
+      showPlain.classList.remove("active");
+      showImage();
+    });
+    showPlain.addEventListener("click", () => {
+      labeled = false;
+      showPlain.classList.add("active");
+      showLabeled.classList.remove("active");
+      showImage();
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const file = document.querySelector("#photo").files[0];
+      if (!file) {
+        setStatus("Choose a photo first.", true);
+        return;
+      }
+      const button = document.querySelector("#solve");
+      button.disabled = true;
+      setStatus("Solving and checking planets and satellites…");
+      const body = new FormData(form);
+      try {
+        const response = await fetch("/api/uploads", { method: "POST", body });
+        const data = await response.json();
+        if (!response.ok && !data.labeled_url) {
+          setStatus(data.error || "The upload failed.", true);
+          return;
+        }
+        if (data.catalog === undefined) {
+          const demo = await fetch("/api/demo").then((item) => item.json());
+          if (demo.catalog) data.catalog = demo.catalog;
+        }
+        render(data);
+      } catch (error) {
+        setStatus("The viewer could not reach the solver.", true);
+      } finally {
+        button.disabled = false;
+      }
+    });
+    loadDemo();
+  </script>
+</body>
+</html>
