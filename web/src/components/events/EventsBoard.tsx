@@ -95,12 +95,13 @@ export function EventsBoard({
         if (searchActive) setRarityFilter("all");
       } catch (e) {
         if (id !== requestId.current || controller.signal.aborted) return;
+        const raw = e instanceof Error ? e.message : "";
         setError(
-          e instanceof Error
-            ? e.message
-            : searchActive
-              ? "Search failed"
-              : "Failed to load events"
+          searchActive
+            ? raw || "Search failed"
+            : raw.includes("unavailable")
+              ? raw
+              : "Sky events are unavailable. Please try again."
         );
       } finally {
         if (id === requestId.current && !controller.signal.aborted) {
