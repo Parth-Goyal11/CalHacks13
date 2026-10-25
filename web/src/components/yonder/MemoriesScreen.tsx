@@ -126,7 +126,7 @@ export default function MemoriesScreen({
             {savedPhotos.map((photo, index) => (
               <button
                 type="button"
-                className={`gallery-photo photo-${index % 3}`}
+                className="gallery-photo"
                 key={photo.id}
                 onClick={() => onOpen(photo)}
               >

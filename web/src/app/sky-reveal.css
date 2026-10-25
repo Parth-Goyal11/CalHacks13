@@ -634,3 +634,66 @@ p.brand-lockup img {
   border-radius: 10px;
   object-fit: cover;
 }
+
+.my-sky .gallery-intro {
+  align-items: center;
+  padding: 2px 16px 12px;
+}
+
+.my-sky .gallery-intro p {
+  max-width: none;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.my-sky .photo-grid {
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: auto;
+  align-items: stretch;
+  gap: 12px;
+  padding: 0 16px 28px;
+}
+
+.my-sky .photo-grid:has(.gallery-photo:only-child) {
+  grid-template-columns: 1fr;
+}
+
+.my-sky .gallery-photo {
+  aspect-ratio: 3 / 4;
+  height: auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.my-sky .photo-grid:has(.gallery-photo:only-child) .gallery-photo {
+  aspect-ratio: 4 / 3;
+}
+
+.my-sky .gallery-photo img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.my-sky .gallery-meta {
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+}
+
+.my-sky .gallery-meta strong {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.my-sky .gallery-meta small {
+  overflow: hidden;
+  margin-top: 4px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
