@@ -55,6 +55,7 @@ export function annotationUrl(result?: SkyPhotoResult): string | undefined {
 
 export function identificationLabel(result?: SkyPhotoResult): string {
   if (!result) return "Sample sky";
+  if (result.reveal) return result.needs_review ? "No objects identified" : "Catalog-checked · model estimate";
   if (result.identity?.method === "plate-solved")
     return result.needs_review
       ? "Plate-solved · review pending"

@@ -5,8 +5,22 @@ import { useEffect, useRef, useState } from "react";
 import { annotationUrl, identificationLabel } from "./analysis";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import type { CelestialObject, SkyPhoto } from "./sky-data";
+import RevealDiscovery from "./RevealDiscovery";
 
-export default function Discovery({
+export type DiscoveryProps = {
+  photo: SkyPhoto;
+  saved: boolean;
+  saving: boolean;
+  error?: string;
+  onSave: () => void;
+  onClose: () => void;
+};
+
+export default function Discovery(props: DiscoveryProps) {
+  return props.photo.result?.reveal ? <RevealDiscovery {...props} /> : <LegacyDiscovery {...props} />;
+}
+
+function LegacyDiscovery({
   photo,
   saved,
   saving,

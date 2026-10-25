@@ -1,5 +1,26 @@
 # Yonder: UI and photo-analysis handoff
 
+## Current camera integration: Ben's sky reveal
+
+Yonder's camera now uses Ben (`beng0ng`)'s `sky-image-proc` implementation at commit `5245844`. His analysis prompts, catalogs, geometry verification, location/FOV prediction and scoring are copied intact. His original overlay, identification feed, figure details, score breakdown, star structure and angle panel render inside Yonder's discovery modal. The only change to an imported result component removes a redundant React effect state update in `SkyOverlay` for lint compatibility.
+
+- Flow: camera/gallery → photo review with location and capture time → Yonder's minimal loading screen → Ben's reveal → Save memory. The full original response and capture metadata are retained in IndexedDB. Existing Python-pipeline Memories still open with their original result view.
+- API: `POST /api/analyze-sky` accepts Ben's `{ imageBase64, mimeType, meta }` JSON contract and returns `{ analysis, score, verification, prediction, fovCheck }`. The client uses Ben's unchanged 1280px JPEG conversion, keeps the original photo locally and adds a 105-second timeout plus stale-response/cancel guards. Cancel preserves the photo and metadata; it does not guarantee cancellation of a provider call already in progress.
+- Required metadata: photo latitude, longitude and capture time in the device's local time zone. Optional camera facing, elevation, FOV and notes match Ben's inputs. Current location is only requested on tap; imported older photos require the user to confirm where/when they were taken. Missing facing stays unknown; Ben's defaults remain elevation 40° and FOV 70°.
+- `POST /api/figure-detail` preserves Ben's Ask Grok for more behavior. Request validation was added around the analysis boundary for malformed JSON, oversized requests, coordinate/date/angle ranges; provider internals are not sent to the browser.
+- “Nothing verified” is Ben's internal placeholder, retained in the raw response but excluded from Yonder's discovered-object counts and overlays. Catalog-checked results remain labeled model estimates, never plate-solved.
+
+### Run this integrated flow
+
+1. From the repository root, `npm install`.
+2. Copy `.env.example` to `.env`, add `XAI_API_KEY`, and optionally set `SKY_VISION_MODEL` to a vision model enabled for the account. `VISION_API_KEY` is for the older Python service and is not used by this flow.
+3. Run `npm run dev`; open the printed URL, tap the center camera button, capture/select a JPEG or PNG, confirm photo location/time and Analyze sky. Browser HEIC decoding varies; unsupported photos return an actionable JPEG/PNG error.
+4. No Python service or Astrometry key is required for Ben's flow. Keep the older `/api/sky-photo` service available only if testing that separate pipeline or opening its server-hosted annotated images.
+
+Integration verification: workspace type checks, web lint and production build; Ben's 27 offline catalog/score checks; metadata/adapter/empty-result/legacy tests; real API malformed-request and missing-key paths; controlled synthetic-response browser checks for loading, original result components and saved-memory reload. Live Grok recognition and physical phone capture need credentials/hardware and are not claimed as tested.
+
+The sections below document the older Python pipeline and broader shared-app work. The camera now uses the flow above.
+
 The current Yonder Figma Make design replaces the former Your Sky UI on `feat/ui`. The app remains a phone-first Next.js web app. This change does not create a native iOS binary or a shared social backend.
 
 Design source: https://www.figma.com/make/lK1XPXSmzeAS9AsI4RDzyu/Design-Your-Sky-Astronomy-App
@@ -8,7 +29,7 @@ Design source: https://www.figma.com/make/lK1XPXSmzeAS9AsI4RDzyu/Design-Your-Sky
 
 - Home, Explore, camera, Memories and Profile use the imported Figma visual language, celestial icons and original photographs.
 - The center camera button opens a real camera dialog, with shutter, rear/front selection when available, gallery picker, native phone-camera fallback, permission errors and cleanup when hidden or closed.
-- A captured or selected photo opens an uncropped review. Analyze sky sends its original file as multipart `image` to the existing Next.js proxy and FastAPI pipeline.
+- A captured or selected photo opens an uncropped review. The former analysis adapter sends multipart `image` to the existing Next.js proxy and FastAPI pipeline; the current camera uses Ben's JSON endpoint above.
 - The minimal loading screen stays visible for the real request. Cancel returns to review and retains the photo. There are no simulated percentages or artificial processing delays.
 - Results distinguish plate-solved identities, model estimates and incomplete reviews. Solver diagnostics are filtered out of object names. Zero named objects and non-sky photos have separate states.
 - The API now includes optional `annotations` with solver-verified normalized coordinates. Rings use the rendered image's contained bounds, including its letterboxing. Model estimates never receive invented positions. The existing annotated JPEG remains available.

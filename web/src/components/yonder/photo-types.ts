@@ -13,6 +13,7 @@ type Critique = {
 };
 
 export type SkyPhotoResult = {
+  reveal?: import("./reveal-analysis").SkyRevealResult;
   annotations?: { name: string; kind: string; x: number; y: number }[];
   photo_id?: string;
   is_night_sky?: boolean;

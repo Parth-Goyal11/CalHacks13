@@ -790,3 +790,31 @@ summary:focus-visible {
     scale: 1;
   }
 }
+
+/* Ben's sky reveal, presented in the existing Yonder photo flow. */
+.camera-review .capture-preview { top: 66px; height: 28%; width: 100%; }
+.capture-details { position: absolute; z-index: 2; top: calc(28% + 80px); bottom: calc(var(--ios-safe-bottom) + 110px); left: 20px; right: 20px; overflow: auto; padding: 4px 4px 20px; color: var(--ivory); }
+.capture-details h2 { font-size: 22px; font-weight: 600; }
+.capture-details p { font-size: 12px; line-height: 1.6; color: #b5b0c2; margin: 8px 0; }
+.capture-details label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; margin: 12px 0; min-width: 0; }
+.capture-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.capture-details input, .capture-details textarea { width: 100%; min-width: 0; min-height: 44px; border: 1px solid #45404e; border-radius: 12px; background: #17151e; padding: 9px 10px; color: #f3f0e8; font-size: 16px; color-scheme: dark; }
+.capture-details button, .capture-details summary { min-height: 44px; padding: 12px 0; color: #dbd1ed; font-size: 13px; cursor: pointer; }
+.capture-details .capture-detail-error { color: #ffc3c3; }
+.yonder-reveal { overflow-y: auto; color: var(--ivory); }
+.reveal-toolbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: max(10px, env(safe-area-inset-top)) 14px 10px; background: rgb(3 5 10 / 0.96); border-bottom: 1px solid #292530; }
+.reveal-toolbar > span { font-size: 14px; }
+.reveal-toolbar > button:last-child { min-height: 44px; max-width: 140px; border: 1px solid #51475e; border-radius: 24px; padding: 8px 14px; font-size: 12px; }
+.reveal-content { display: flex; flex-direction: column; gap: 20px; padding: 24px 18px max(32px, env(safe-area-inset-bottom)); }
+.reveal-content h1 { font-size: 27px; line-height: 1.2; margin: 10px 0; font-weight: 600; letter-spacing: -0.6px; }
+.reveal-content > div > p, .reveal-content > p { font-size: 13px; line-height: 1.65; color: #b5b0c2; }
+.reveal-content .reveal-eyebrow { font-size: 10px; text-transform: uppercase; letter-spacing: 1.4px; color: #d2c1e7; }
+.reveal-image { overflow: hidden; border-radius: 22px; border: 1px solid #36303f; }
+.reveal-figures { display: flex; flex-wrap: wrap; gap: 8px; }
+.reveal-figures button, .reveal-skip { min-height: 44px; border: 1px solid #51475e; border-radius: 24px; padding: 10px 14px; font-size: 12px; color: #e2d9ee; }
+.reveal-figures button[aria-pressed=true] { background: #393044; }
+.reveal-content > .reveal-footnote { font-size: 11px; color: #aaa2b7; }
+.yonder-reveal main { min-width: 0; }
+.yonder-reveal main > * { min-width: 0; overflow-wrap: anywhere; }
+.yonder-reveal aside button, .yonder-reveal main details summary { min-height: 44px; }
+@media (prefers-reduced-motion: reduce) { .yonder-reveal * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }

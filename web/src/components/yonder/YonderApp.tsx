@@ -189,10 +189,10 @@ export default function YonderApp({
       image,
       blob: file,
       result,
-      title: "My sky tonight",
+      title: result.reveal?.analysis.headline ?? "My sky tonight",
       date: dateLabel(createdAt),
       createdAt,
-      location: sky.chosen ? sky.place.name : "Location not recorded",
+      location: result.reveal ? `${result.reveal.meta.latitude.toFixed(3)}°, ${result.reveal.meta.longitude.toFixed(3)}°` : sky.chosen ? sky.place.name : "Location not recorded",
       objects: objectsFor(result),
       note: "",
     };
@@ -321,7 +321,7 @@ export default function YonderApp({
           />
         </div>
         {cameraOpen && (
-          <CameraFlow onClose={closeOverlay} onComplete={completed} />
+          <CameraFlow place={sky.chosen ? sky.place : undefined} onClose={closeOverlay} onComplete={completed} />
         )}
         {activePhoto && (
           <Discovery

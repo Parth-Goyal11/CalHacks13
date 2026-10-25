@@ -2,17 +2,24 @@
 
 /* eslint-disable @next/next/no-img-element -- User photo object URLs need no image optimizer. */
 import { useEffect, useRef, useState, type ChangeEvent } from "react";
-import { analyzeSky, type SkyPhotoResult } from "./analysis";
+import type { SkyPhotoResult } from "./analysis";
+import { analyzeReveal } from "./reveal-analysis";
+import CaptureDetails, { captureMeta, type CaptureDraft } from "./CaptureDetails";
+import { toDatetimeLocalValue } from "@/lib/image";
+import type { Place } from "./tonight-data";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import LoadingScreen from "./LoadingScreen";
 
 export default function CameraFlow({
   onClose,
   onComplete,
+  place,
 }: {
   onClose: () => void;
   onComplete: (file: File, result: SkyPhotoResult) => void;
+  place?: Place;
 }) {
+  const [draft, setDraft] = useState<CaptureDraft>(() => ({ latitude: place ? String(place.latitude) : "", longitude: place ? String(place.longitude) : "", takenAt: toDatetimeLocalValue(new Date()), facing: "", elevation: "", fov: "", notes: "" }));
   const [step, setStep] = useState<"live" | "preview" | "loading">("live");
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [canFlip, setCanFlip] = useState(false);
@@ -190,14 +197,19 @@ export default function CameraFlow({
 
   async function analyze() {
     if (!photo || step === "loading") return;
+    const meta = captureMeta(draft);
+    if (!meta) {
+      setAnalysisError("Enter a valid photo location and time. Check any optional camera angles too.");
+      return;
+    }
     const controller = new AbortController();
     request.current = controller;
     const serial = ++requestSerial.current;
     setAnalysisError("");
     setStep("loading");
-    const timer = window.setTimeout(() => controller.abort("timeout"), 240000);
+    const timer = window.setTimeout(() => controller.abort("timeout"), 105000);
     try {
-      const result = await analyzeSky(photo.file, controller.signal);
+      const result = await analyzeReveal(photo.file, meta, controller.signal);
       if (serial === requestSerial.current && !controller.signal.aborted)
         onComplete(photo.file, result);
     } catch (error) {
@@ -218,7 +230,7 @@ export default function CameraFlow({
   return (
     <dialog
       ref={dialog}
-      className="camera-flow overlay-dialog"
+      className={`camera-flow overlay-dialog ${step === "preview" ? "camera-review" : ""}`}
       aria-label="Camera"
       onCancel={(event) => {
         event.preventDefault();
@@ -344,17 +356,7 @@ export default function CameraFlow({
                   it.
                 </p>
               )}
-              {analysisError && (
-                <div className="analysis-error" role="alert">
-                  <p>{analysisError}</p>
-                  <button
-                    type="button"
-                    onClick={() => fileInput.current?.click()}
-                  >
-                    Choose another photo
-                  </button>
-                </div>
-              )}
+              <CaptureDetails draft={draft} onChange={setDraft} error={analysisError} />
               <div className="capture-actions">
                 <button type="button" onClick={retake}>
                   Retake

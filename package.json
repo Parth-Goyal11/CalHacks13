@@ -11,9 +11,14 @@
     "build": "npm run build -w web",
     "ingest": "npm run ingest -w ingest",
     "sky-photo": "uvicorn sky_photo.main:app --reload --env-file .env --host 127.0.0.1 --port 8000",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:yonder": "tsx --tsconfig web/tsconfig.json tests/yonder-reveal.test.ts",
+    "test:sky-catalog": "tsx lib/scripts/verify-accuracy.mts"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15"
   }
 }

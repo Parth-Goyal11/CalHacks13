@@ -14,8 +14,9 @@ export function createGrokClient(apiKey = process.env.XAI_API_KEY) {
 }
 
 export const grok = {
-  /** Default chat model id — override per call as needed. */
-  modelId: "grok-3-mini" as const,
+  /** Fast non-reasoning default for demos. */
+  modelId: "grok-4.20-0309-non-reasoning" as const,
+  visionModelId: "grok-4.20-0309-non-reasoning" as const,
 
   async chat(messages: CoreMessage[], options?: { model?: string; system?: string }) {
     const xai = createGrokClient();
