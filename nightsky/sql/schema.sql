@@ -42,6 +42,17 @@ create table if not exists satellites (
   updated_at timestamptz not null default now()
 );
 
+alter table satellites add column if not exists object_class text;
+alter table satellites add column if not exists ops_status text;
+alter table satellites add column if not exists owner text;
+alter table satellites add column if not exists launch_date date;
+alter table satellites add column if not exists launch_site text;
+alter table satellites add column if not exists perigee_km double precision;
+alter table satellites add column if not exists apogee_km double precision;
+alter table satellites add column if not exists period_min double precision;
+alter table satellites add column if not exists orbit_center text;
+alter table satellites add column if not exists orbit_type text;
+
 create table if not exists captures (
   id bigserial primary key,
   taken_at timestamptz,

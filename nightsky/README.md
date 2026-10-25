@@ -30,7 +30,7 @@ python -m nightsky all
 
 Put `BRIGHTDATA_API_TOKEN` in `.env`. The CLI loads that file and does not override variables already set in the shell. `.env` is gitignored.
 
-`python -m nightsky all` creates the tables, loads Hipparcos stars of magnitude 8 and brighter, loads the CelesTrak `stations` and `visual` groups, downloads `de421.bsp`, plate-solves a synthetic photo of Orion, and writes `output/orion_labeled.png`.
+`python -m nightsky all` creates the tables, loads Hipparcos stars of magnitude 8 and brighter, loads the CelesTrak `stations` and `visual` groups plus launch dates from the satellite catalog, downloads `de421.bsp`, plate-solves a synthetic photo of Orion, and writes `output/orion_labeled.png`.
 
 The Orion check prints Mintaka, Alnilam, and Alnitak. Their solved pixels should sit on the stars. The solved field center should be within a few arcminutes of right ascension 84° and declination −1.2°.
 
@@ -43,7 +43,7 @@ python -m nightsky solve-demo
 pytest
 ```
 
-Satellite elements refresh when the cached CSV is older than three days. A reload never replaces a row with an older epoch. Star rows are loaded once; load them again only if you change the magnitude limit. The planet kernel stays on disk under `data/skyfield/`.
+Satellite elements and the satellite catalog refresh when the cached CSV is older than three days. A reload never replaces a row with an older epoch. Star rows are loaded once; load them again only if you change the magnitude limit. The planet kernel stays on disk under `data/skyfield/`.
 
 ## See it
 
@@ -51,7 +51,7 @@ Satellite elements refresh when the cached CSV is older than three days. A reloa
 python -m nightsky serve
 ```
 
-Open [http://127.0.0.1:8741](http://127.0.0.1:8741). The sky map draws Hipparcos, the bright planets, the Moon, and visible satellites from your latitude, longitude, and the time, over Axel Mellinger’s all-sky photograph of that same view. Hubble and JWST frames are only a few arcminutes across, so they are not the background. Polaris is true north, and its height above the horizon is your latitude. Drag the heading and lens height to look around. The photograph is one all-sky image redrawn for the current aim, so it moves with the slider. The background is drawn: a smooth Milky Way and sharp catalog stars, so it does not go soft the way a stretched all-sky photo does. Click a named dot for a short account of that star: its constellation, distance, where it is right now, and a few facts. On a phone, Hold the phone to the sky follows the compass, tilt, and roll, so the photograph and the names turn with the phone. The rear camera can replace the photograph. Show the sky behind the names does that on its own. Constellation lines for the familiar figures are drawn from the same Hipparcos stars. Scan this photo runs the same plate solve as a photo with no heading. A name is kept only when the star pattern confirms it. A laptop has no compass, so the sliders are the control there.
+Open [http://127.0.0.1:8741](http://127.0.0.1:8741). The sky map draws Hipparcos, the bright planets, the Moon, and visible satellites for your latitude, longitude, and the clock time, including the time of year. Stars follow local sidereal time. Planets and the Moon come from the JPL DE421 ephemeris for that instant. Satellites are propagated from CelesTrak elements for that same instant. The clock does not advance by itself. The background is drawn: a smooth Milky Way and sharp catalog stars. Polaris is true north, and its height above the horizon is your latitude. Drag the heading and lens height to look around. Click a named star for its constellation, distance, and a few facts. Click a satellite for its launch date, what it is for, and the machinery on board when that is public. A spent rocket stage is described as a spent stage. On a phone, Hold the phone to the sky follows the compass, tilt, and roll, so the drawn sky and the names turn with the phone. Show the sky behind the names turns on the rear camera, which is the live view through the lens. Constellation lines for the familiar figures are drawn from the same Hipparcos stars. Scan this photo runs the same plate solve as a photo with no heading. A name is kept only when the star pattern confirms it. A laptop has no compass, so the sliders are the control there.
 
 The Orion demo is the labeled field already solved from the catalog. Time is taken to the minute. Latitude and longitude are decimal degrees, north and east positive. The browser can fill the device location. A star with no common name is marked with its Hipparcos number.
 
@@ -59,7 +59,7 @@ The solver matches the pattern of stars in the photo to Hipparcos. A field with 
 
 ## What is stored
 
-`landing` keeps each raw fetch (Hipparcos checksum, CelesTrak CSV rows, Unlocker HTML). `stars` and `satellites` are the queryable catalog. Planets are not rows. `captures`, `plate_solutions`, and `identifications` are the photo, the solved WCS, and the labels.
+`landing` keeps each raw fetch (Hipparcos checksum, CelesTrak CSV rows, Unlocker HTML). `stars` and `satellites` are the queryable catalog. Satellite rows also keep the launch date, owner, and object class from the CelesTrak satellite catalog. Planets are not rows. `captures`, `plate_solutions`, and `identifications` are the photo, the solved WCS, and the labels.
 
 A field that crosses 0h/24h right ascension is queried as two right-ascension ranges.
 

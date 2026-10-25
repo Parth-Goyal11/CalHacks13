@@ -100,7 +100,8 @@ def galactic_lb(ra_deg: float, dec_deg: float) -> tuple[float, float]:
 
 
 def _attach_story(row: dict) -> None:
-    story = story_for(str(row["catalog_id"]), row["object_type"], row.get("name"))
+    record = row.pop("satcat", None)
+    story = story_for(str(row["catalog_id"]), row["object_type"], row.get("name"), record)
     if not story:
         return
     row["constellation"] = story.get("constellation")
@@ -256,10 +257,32 @@ def _satellite_altaz(conn, latitude: float, longitude: float, when: datetime) ->
     site = wgs84.latlon(latitude, longitude)
     moment = timescale.from_datetime(when)
     with conn.cursor() as cur:
-        cur.execute("select norad_id, name, elements from satellites")
+        cur.execute(
+            """
+            select norad_id, name, intl_desig, elements,
+                   object_class, ops_status, owner, launch_date, launch_site,
+                   perigee_km, apogee_km, period_min, orbit_center, orbit_type
+            from satellites
+            """
+        )
         rows = cur.fetchall()
     found = []
-    for norad_id, name, elements in rows:
+    for (
+        norad_id,
+        name,
+        intl_desig,
+        elements,
+        object_class,
+        ops_status,
+        owner,
+        launch_date,
+        launch_site,
+        perigee_km,
+        apogee_km,
+        period_min,
+        orbit_center,
+        orbit_type,
+    ) in rows:
         try:
             satellite = satellite_from_elements(elements, timescale)
             topocentric = (satellite - site).at(moment)
@@ -280,6 +303,19 @@ def _satellite_altaz(conn, latitude: float, longitude: float, when: datetime) ->
                 "alt_deg": float(alt.degrees),
                 "az_deg": float(az.degrees) % 360.0,
                 "anchor": False,
+                "satcat": {
+                    "intl_desig": intl_desig,
+                    "object_class": object_class,
+                    "ops_status": ops_status,
+                    "owner": owner,
+                    "launch_date": launch_date,
+                    "launch_site": launch_site,
+                    "perigee_km": perigee_km,
+                    "apogee_km": apogee_km,
+                    "period_min": period_min,
+                    "orbit_center": orbit_center,
+                    "orbit_type": orbit_type,
+                },
             }
         )
     return found

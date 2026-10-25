@@ -659,6 +659,95 @@ def test_vega_note_describes_the_star(db):
     assert moon["distance_label"]
 
 
+def _satellite_story(conn, norad_id: int) -> dict:
+    from nightsky.satfacts import satellite_story
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            select name, intl_desig, object_class, ops_status, owner, launch_date, launch_site,
+                   perigee_km, apogee_km, period_min, orbit_center, orbit_type
+            from satellites where norad_id = %s
+            """,
+            (norad_id,),
+        )
+        row = cur.fetchone()
+    assert row is not None
+    name, *fields = row
+    keys = (
+        "intl_desig",
+        "object_class",
+        "ops_status",
+        "owner",
+        "launch_date",
+        "launch_site",
+        "perigee_km",
+        "apogee_km",
+        "period_min",
+        "orbit_center",
+        "orbit_type",
+    )
+    return satellite_story(str(norad_id), name, dict(zip(keys, fields)))
+
+
+def test_iss_card_names_the_station_and_the_launch(db):
+    conn, _summary = db
+    story = _satellite_story(conn, 25544)
+    assert "20 November 1998" in story["about"]
+    assert "Baikonur" in story["about"]
+    text = f"{story['about']} {' '.join(story['facts'])}".lower()
+    assert "laboratory" in text
+    assert "zarya" in text
+    assert "solar" in text
+    assert story["distance"]
+    assert story["constellation"] == "Crewed station"
+
+
+def test_rocket_body_card_does_not_invent_instruments(db):
+    conn, _summary = db
+    with conn.cursor() as cur:
+        cur.execute("select norad_id from satellites where name like %s order by norad_id limit 1", ("%R/B%",))
+        norad_id = cur.fetchone()[0]
+    story = _satellite_story(conn, norad_id)
+    blob = f"{story['about']} {' '.join(story['facts'])}".lower()
+    assert "stage" in blob
+    for word in ("telescope", "camera", "radar", "spectrometer"):
+        assert word not in blob
+
+
+def test_station_cubesat_keeps_the_release_date(db):
+    conn, _summary = db
+    story = _satellite_story(conn, 67683)
+    assert "3 February 2026" in story["about"]
+    assert "Kibo" in story["about"]
+    facts = " ".join(story["facts"])
+    assert "20 November 1998" in facts
+    assert "station" in facts.lower()
+    assert "camera" in facts.lower()
+
+
+def test_cosmos_card_does_not_invent_a_payload(db):
+    conn, _summary = db
+    story = _satellite_story(conn, 14699)
+    assert "does not list the instruments" in story["about"]
+    assert "1984" in story["about"]
+
+
+def test_visible_satellites_carry_the_same_card(db):
+    from nightsky.skyview import sky_chart
+
+    conn, _summary = db
+    when = datetime(2026, 10, 25, 5, 0, tzinfo=timezone.utc)
+    chart = sky_chart(conn, 37.77, -122.42, when)
+    satellites = [row for row in chart["objects"] if row["object_type"] == "satellite"]
+    assert satellites
+    for row in satellites:
+        assert row.get("about")
+        assert row.get("facts")
+        assert "satcat" not in row
+    assert any(character.isdigit() for row in satellites for character in row["about"])
+
+
 def test_catalog_distance_uses_hipparcos_parallax():
     from nightsky.stars import distance_ly
 
@@ -709,6 +798,8 @@ def test_viewer_page_and_file_guard():
         assert "90 - event.beta" not in page
         assert "Click one" in page
         assert "a few facts" in page
+        assert "launch date" in page
+        assert "this season" in page
         assert "stretched photograph" in page
         assert "Scan this photo" in page
         assert "Upload a photo" not in page

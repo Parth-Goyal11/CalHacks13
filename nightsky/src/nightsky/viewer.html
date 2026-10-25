@@ -91,6 +91,7 @@
     .scroll { max-height: 420px; overflow: auto; }
     .viewport {
       position: relative;
+      container-type: size;
       width: 100%;
       aspect-ratio: 3 / 4;
       max-height: 72vh;
@@ -115,15 +116,18 @@
       top: 12px;
       left: 12px;
       right: 12px;
-      max-width: 340px;
-      max-height: calc(100% - 24px);
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      max-width: 380px;
+      max-height: calc(100cqh - 24px);
+      overflow: hidden;
       padding: 12px 36px 12px 14px;
       border: 1px solid var(--line);
       border-radius: 12px;
       background: rgba(10, 14, 22, 0.92);
       color: var(--text);
     }
+    #detail-body { overflow: auto; min-height: 0; }
     #detail[hidden] { display: none; }
     #detail h2 {
       margin: 0 0 4px;
@@ -149,7 +153,7 @@
       line-height: 1.4;
     }
     #detail-facts li { margin: 0 0 6px; }
-    #detail-where { margin: 0; font-size: 14px; }
+    #detail-where { margin: 8px 0 0; font-size: 14px; flex: none; }
     #detail-close {
       position: absolute;
       top: 8px;
@@ -171,7 +175,7 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">The map is the catalog drawn for where you are and what time it is. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, hold it up and the sky turns with the compass and the tilt, the way a planetarium does. The camera can replace the drawn sky so the names sit on the real one. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
+    <p class="lede">The map is the catalog drawn for where you are and what time it is. The date counts: the stars are the ones up in this season, and the planets, the Moon, and the satellites are placed for that minute. The clock stays where you set it. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, hold it up and the sky turns with the compass and the tilt, the way a planetarium does. The camera can replace the drawn sky so the names sit on the real one. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
@@ -189,13 +193,15 @@
             <button id="detail-close" type="button">Close</button>
             <h2 id="detail-name"></h2>
             <p id="detail-kicker"></p>
-            <p id="detail-summary"></p>
-            <ul id="detail-facts"></ul>
+            <div id="detail-body">
+              <p id="detail-summary"></p>
+              <ul id="detail-facts"></ul>
+            </div>
             <p id="detail-where"></p>
           </aside>
         </div>
         <p id="sky-status" class="note"></p>
-        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. The sky is drawn, not a stretched photograph: a smooth Milky Way and sharp stars from the catalog. Named dots pulse. Click one for where the star is, how far away it is, and a few facts. A star with only a Hipparcos number stays a point, without a name.</p>
+        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. The sky is drawn, not a stretched photograph: a smooth Milky Way and sharp stars from the catalog. Named dots pulse. Click one for where it is and a few facts. A satellite card adds the launch date and what is on board. A star with only a Hipparcos number stays a point, without a name. The camera, not this drawing, is the live look through the lens.</p>
         <div class="aim">
           <label>Heading from true north, degrees clockwise
             <input id="heading" type="range" min="0" max="360" value="0">

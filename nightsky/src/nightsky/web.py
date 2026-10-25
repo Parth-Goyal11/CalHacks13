@@ -11,10 +11,11 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from nightsky.backdrop import panorama_jpeg, survey_jpeg
-from nightsky.db import connect
+from nightsky.db import connect, init_db
 from nightsky.horizon import Aim
 from nightsky.paths import OUTPUT
 from nightsky.photos import catalog_counts, demo_view, identify_photo, read_exif
+from nightsky.satellites import refresh_satcat
 from nightsky.stars import fill_spectral_types
 from nightsky.skyview import sky_chart
 
@@ -27,9 +28,12 @@ PAGE = Path(__file__).with_name("viewer.html")
 def serve(host: str = HOST, port: int = PORT) -> None:
     try:
         with connect() as conn:
+            init_db(conn)
             fill_spectral_types(conn)
-    except Exception:
-        pass
+            refresh_satcat(conn)
+            conn.commit()
+    except Exception as exc:
+        print(f"catalog refresh skipped: {exc}")
     threading.Thread(target=_warm_panorama, daemon=True).start()
     server = ThreadingHTTPServer((host, port), ViewerHandler)
     print(f"Night sky viewer at http://127.0.0.1:{port}")

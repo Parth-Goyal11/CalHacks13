@@ -354,30 +354,13 @@ _STORIES = {
 }
 
 
-def story_for(catalog_id: str, object_type: str, name: str | None) -> dict | None:
-    """Notes for one catalog object, or a short satellite note."""
+def story_for(catalog_id: str, object_type: str, name: str | None, record: dict | None = None) -> dict | None:
+    """Notes for one catalog object. Satellites use the launch catalog when it is present."""
     found = _STORIES.get(str(catalog_id))
     if found:
         return found
     if object_type != "satellite":
         return None
-    label = name or "This satellite"
-    if name and "ISS" in name.upper():
-        return {
-            "constellation": "Earth orbit",
-            "distance": "about 400 km up",
-            "about": "The International Space Station is a crewed laboratory in low Earth orbit. It circles Earth about every 90 minutes and can outshine every star when it passes overhead.",
-            "facts": [
-                "It looks like a bright, steady light that crosses the sky in a few minutes. It does not twinkle, and it does not have flashing wing lights.",
-                f"The public catalog number is NORAD {catalog_id}.",
-            ],
-        }
-    return {
-        "constellation": "Earth orbit",
-        "distance": "low Earth orbit",
-        "about": f"{label} is a satellite. Its place in the sky is predicted from public orbital elements, not from a star catalog.",
-        "facts": [
-            "Satellites move. A star holds still relative to the others. If the point is drifting, it is not a star.",
-            f"The public catalog number is NORAD {catalog_id}.",
-        ],
-    }
+    from nightsky.satfacts import satellite_story
+
+    return satellite_story(catalog_id, name, record)
