@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
+  FovCrossCheck,
+  FovPrediction,
   ScoreResult,
   SkyAnalysis,
   SkyCaptureMeta,
@@ -14,6 +16,7 @@ import {
   localInputToIso,
   toDatetimeLocalValue,
 } from "@/lib/image";
+import { AngleFovPanel } from "./AngleFovPanel";
 import { FigurePanel } from "./FigurePanel";
 import { IdentificationFeed } from "./IdentificationFeed";
 import { ScoreBreakdown } from "./ScoreBreakdown";
@@ -32,6 +35,8 @@ export function SkyExplorer() {
   const [verification, setVerification] = useState<VerificationReport | null>(
     null
   );
+  const [prediction, setPrediction] = useState<FovPrediction | null>(null);
+  const [fovCheck, setFovCheck] = useState<FovCrossCheck | null>(null);
   const [revealedCount, setRevealedCount] = useState(0);
   const [revealing, setRevealing] = useState(false);
   const [selected, setSelected] = useState<SkyFigure | null>(null);
@@ -44,6 +49,7 @@ export function SkyExplorer() {
   const [locationLabel, setLocationLabel] = useState("");
   const [takenAt, setTakenAt] = useState("");
   const [facingDegrees, setFacingDegrees] = useState("");
+  const [elevationDegrees, setElevationDegrees] = useState("40");
   const [notes, setNotes] = useState("");
   const [geoBusy, setGeoBusy] = useState(false);
 
@@ -168,6 +174,8 @@ export function SkyExplorer() {
     const takenAtIso = localInputToIso(takenAt);
     if (!Number.isFinite(lat) || !Number.isFinite(lon) || !takenAtIso) return null;
     const facing = facingDegrees.trim() === "" ? undefined : Number(facingDegrees);
+    const elev =
+      elevationDegrees.trim() === "" ? undefined : Number(elevationDegrees);
     return {
       latitude: lat,
       longitude: lon,
@@ -175,6 +183,8 @@ export function SkyExplorer() {
       locationLabel: locationLabel.trim() || undefined,
       facingDegrees:
         facing !== undefined && Number.isFinite(facing) ? facing : undefined,
+      elevationDegrees:
+        elev !== undefined && Number.isFinite(elev) ? elev : undefined,
       notes: notes.trim() || undefined,
     };
   }
@@ -213,6 +223,8 @@ export function SkyExplorer() {
       setAnalysis(data.analysis as SkyAnalysis);
       setScore((data.score as ScoreResult) ?? null);
       setVerification((data.verification as VerificationReport) ?? null);
+      setPrediction((data.prediction as FovPrediction) ?? null);
+      setFovCheck((data.fovCheck as FovCrossCheck) ?? null);
       setRevealedCount(0);
       setRevealing(true);
       setSelected(null);
@@ -415,18 +427,34 @@ export function SkyExplorer() {
               />
             </label>
 
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="text-zinc-400">
-                Facing direction (degrees, optional)
-              </span>
-              <input
-                value={facingDegrees}
-                onChange={(e) => setFacingDegrees(e.target.value)}
-                inputMode="numeric"
-                placeholder="0 = North, 90 = East"
-                className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
-              />
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="text-zinc-400">
+                  Facing ° (recommended)
+                </span>
+                <input
+                  value={facingDegrees}
+                  onChange={(e) => setFacingDegrees(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="0=N · 90=E · 180=S"
+                  className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span className="text-zinc-400">Camera elevation °</span>
+                <input
+                  value={elevationDegrees}
+                  onChange={(e) => setElevationDegrees(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="40 (horizon=0, zenith=90)"
+                  className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
+                />
+              </label>
+            </div>
+            <p className="text-xs text-zinc-600">
+              Facing + elevation drive the angle layer: what should appear in
+              frame from your location and how the phone was pointed.
+            </p>
 
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="text-zinc-400">Notes (optional)</span>
@@ -476,6 +504,8 @@ export function SkyExplorer() {
                 setAnalysis(null);
                 setScore(null);
                 setVerification(null);
+                setPrediction(null);
+                setFovCheck(null);
                 setRevealedCount(0);
                 setRevealing(false);
                 setSelected(null);
@@ -487,6 +517,10 @@ export function SkyExplorer() {
               New photo
             </button>
           </div>
+
+          {prediction ? (
+            <AngleFovPanel prediction={prediction} fovCheck={fovCheck} />
+          ) : null}
 
           {verification ? (
             <IdentificationFeed

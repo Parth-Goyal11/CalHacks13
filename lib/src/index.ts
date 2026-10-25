@@ -75,3 +75,11 @@ export type {
 
 export { alignAnalysisToCatalog } from "./align-figures";
 export type { AlignResult, FigureAlignment } from "./align-figures";
+
+export { buildFovPrediction, crossCheckWithFov } from "./sky-fov";
+export type {
+  FovCrossCheck,
+  FovFigureCheck,
+  FovPrediction,
+  PredictedFigure,
+} from "./sky-fov";

@@ -52,13 +52,20 @@ export async function POST(request: Request) {
       `[analyze-sky] imageBytes≈${Math.round((raw.length * 3) / 4)} mime=${body.mimeType ?? "image/jpeg"} → Grok`
     );
 
-    const { analysis, score, verification } = await analyzeNightSky({
-      imageBase64: raw,
-      mimeType: body.mimeType ?? "image/jpeg",
-      meta: body.meta,
-    });
+    const { analysis, score, verification, prediction, fovCheck } =
+      await analyzeNightSky({
+        imageBase64: raw,
+        mimeType: body.mimeType ?? "image/jpeg",
+        meta: body.meta,
+      });
 
-    return Response.json({ analysis, score, verification });
+    return Response.json({
+      analysis,
+      score,
+      verification,
+      prediction,
+      fovCheck,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Analysis failed";
     console.error("[analyze-sky]", err);
