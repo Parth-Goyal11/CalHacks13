@@ -773,8 +773,8 @@ function ProfileScreen({
         </button>
       </header>
       <div className="profile-identity">
-        <div className="profile-photo profile-monogram">
-          {profile.name.slice(0, 2).toUpperCase()}
+        <div className="profile-photo">
+          <img src={IMG.profile} alt="" />
           <span>
             <SkyIcon name="spark" size={15} />
           </span>
@@ -833,7 +833,7 @@ function ProfileScreen({
       </div>
       <div className="section-heading profile-section-heading">
         <h2>Featured skies</h2>
-        <span>From your Memories</span>
+        <span>Chosen by {profile.name}</span>
       </div>
       {real.length ? (
         <div className="featured-skies">

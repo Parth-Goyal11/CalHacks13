@@ -233,28 +233,122 @@ summary:focus-visible {
 .gallery-meta small {
   font-size: 12px;
 }
-.profile-monogram {
-  display: grid;
-  place-items: center;
-  color: #e7dff4;
-  background: #30283d;
-  font-size: 26px;
+.profile-screen {
+  padding-inline: 20px;
+}
+.profile-identity {
+  gap: 12px;
+  margin-top: 17px;
+}
+.profile-photo > img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+}
+.profile-photo > span {
+  right: -2px;
+  bottom: -2px;
+  width: 21px;
+  height: 21px;
+  border-width: 2px;
+}
+.profile-identity h1 {
+  font-size: 24px;
   font-weight: 600;
+  line-height: 1.15;
+}
+.profile-identity p {
+  margin-top: 2px;
+  font-size: 10px;
 }
 .profile-identity h1 {
   overflow-wrap: anywhere;
 }
 .profile-bio {
-  font-size: 14px;
-  line-height: 1.6;
+  max-width: 300px;
+  margin: 12px 0 11px;
+  font-size: 12px;
+  line-height: 1.45;
 }
 .profile-facts span {
-  font-size: 12px;
+  min-height: 29px;
+  padding-inline: 9px;
+  font-size: 10px;
+}
+.streak-card {
+  min-height: 96px;
+  margin-top: 14px;
+  padding: 14px 17px;
+  border-radius: 20px;
+}
+.streak-card .eyebrow {
+  margin: 0 0 5px;
+  color: #c5b9dc;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.15em;
+}
+.streak-card strong {
+  font-size: 24px;
+  font-weight: 600;
+}
+.streak-card > div > span {
+  font-size: 10px;
+}
+.streak-orbit {
+  width: 56px;
+  height: 56px;
+  box-shadow:
+    0 0 0 5px rgb(217 199 157 / 0.06),
+    inset 0 0 18px rgb(217 199 157 / 0.08);
+}
+.streak-orbit span {
+  font-size: 18px !important;
+}
+.profile-stats {
+  margin-top: 8px;
+  padding: 11px 0;
+}
+.profile-stats strong {
+  font-size: 19px;
+  font-weight: 600;
+}
+.profile-stats span {
+  font-size: 9px;
+}
+.profile-section-heading {
+  padding: 16px 2px 10px;
+}
+.profile-section-heading h2 {
+  font-size: 18px;
+}
+.profile-section-heading > span {
+  color: var(--muted);
+  font-size: 9px;
+}
+.featured-skies {
+  gap: 8px;
+}
+.featured-skies button {
+  height: 112px;
+  border-radius: 16px;
+}
+.featured-skies button > span {
+  right: 9px;
+  bottom: 9px;
+  left: 9px;
+}
+.featured-skies strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.featured-skies small {
+  font-size: 9px;
 }
 .profile-first-sky {
   display: flex;
   width: 100%;
-  min-height: 112px;
+  min-height: 96px;
   align-items: center;
   justify-content: center;
   gap: 14px;
