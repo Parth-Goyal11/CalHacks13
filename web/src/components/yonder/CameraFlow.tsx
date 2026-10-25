@@ -8,7 +8,8 @@ import CaptureDetails, { captureMeta, type CaptureDraft } from "./CaptureDetails
 import { toDatetimeLocalValue } from "@/lib/image";
 import type { Place } from "./tonight-data";
 import { IconButton, SkyIcon } from "./SkyIcon";
-import LoadingScreen from "./LoadingScreen";
+import { IdentifyScan } from "@/components/sky/IdentifyScan";
+import { sampleScene, type SceneSketch } from "@/lib/sample-scene";
 
 export default function CameraFlow({
   onClose,
@@ -49,6 +50,9 @@ export default function CameraFlow({
   const photoUrl = useRef("");
   const keptFile = useRef<File | null>(null);
   const [stored, setStored] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [sketch, setSketch] = useState<SceneSketch | null>(null);
+  const [muted, setMuted] = useState(true);
 
   useEffect(() => {
     dialog.current?.showModal();
@@ -257,7 +261,19 @@ export default function CameraFlow({
     request.current = controller;
     const serial = ++requestSerial.current;
     setAnalysisError("");
+    setElapsed(0);
+    setSketch(null);
     setStep("loading");
+    const started = Date.now();
+    const clock = window.setInterval(
+      () => setElapsed(Math.floor((Date.now() - started) / 1000)),
+      250,
+    );
+    void sampleScene(photo.url)
+      .then((sampled) => {
+        if (serial === requestSerial.current) setSketch(sampled);
+      })
+      .catch(() => null);
     const timer = window.setTimeout(() => controller.abort("timeout"), 105000);
     try {
       const result = await analyzeReveal(photo.file, meta, controller.signal);
@@ -274,6 +290,7 @@ export default function CameraFlow({
       );
       setStep("preview");
     } finally {
+      window.clearInterval(clock);
       window.clearTimeout(timer);
     }
   }
@@ -289,8 +306,19 @@ export default function CameraFlow({
         else onClose();
       }}
     >
-      {step === "loading" ? (
-        <LoadingScreen onCancel={cancelAnalysis} />
+      {step === "loading" && photo ? (
+        <div className="scan-flow">
+          <div className="scan-flow-top">
+            <IconButton label="Cancel analysis" icon="close" onClick={cancelAnalysis} />
+          </div>
+          <IdentifyScan
+            imageUrl={photo.url}
+            elapsed={elapsed}
+            sketch={sketch}
+            muted={muted}
+            onToggleMute={() => setMuted((value) => !value)}
+          />
+        </div>
       ) : (
         <>
           {step === "live" ? (

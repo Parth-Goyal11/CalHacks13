@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Original user files and solver JPEGs must retain their geometry. */
 import { useEffect, useRef, useState } from "react";
 import { annotationUrl, identificationLabel } from "./analysis";
+import { FeatureReveal } from "@/components/sky/FeatureReveal";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import type { CelestialObject, SkyPhoto } from "./sky-data";
 import ObjectExplanation from "./ObjectExplanation";
@@ -88,7 +89,7 @@ export default function Discovery({
   return (
     <dialog
       ref={dialog}
-      className={`discovery overlay-dialog ${real ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery" : ""}`}
+      className={`discovery overlay-dialog ${real ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery has-diagrams" : ""}`}
       aria-label={`Discover ${photo.title}`}
       onCancel={(event) => {
         event.preventDefault();
@@ -97,7 +98,7 @@ export default function Discovery({
         else onClose();
       }}
     >
-      {!imageFailed ? (
+      {!result?.reveal && !imageFailed ? (
         <img
           ref={image}
           className="discovery-photo"
@@ -124,7 +125,7 @@ export default function Discovery({
           available below.
         </div>
       )}
-      <div className="discovery-vignette" />
+      {!result?.reveal && <div className="discovery-vignette" />}
       <div className="discovery-top">
         <IconButton label="Close discovery" icon="close" onClick={onClose} />
         <div>
@@ -146,11 +147,29 @@ export default function Discovery({
           <SkyIcon name="bookmark" />
         </button>
       </div>
-      <div className="photo-caption">
-        <strong>{photo.title}</strong>
-        <span>{photo.date}</span>
-      </div>
-      {annotated && !annotationFailed && (
+      {!result?.reveal && (
+        <div className="photo-caption">
+          <strong>{photo.title}</strong>
+          <span>{photo.date}</span>
+        </div>
+      )}
+      {result?.reveal && (
+        <div className="discovery-reveal">
+          <FeatureReveal
+            imageUrl={photo.image}
+            analysis={result.reveal.analysis}
+            highlights={result.reveal.score.highlights}
+            totalPoints={result.reveal.score.figurePointsTotal}
+            selectedId={selected?.figureId ?? null}
+            frameRarity={result.reveal.score.rarity}
+            onSelect={(figure) => {
+              const match = photo.objects.find((object) => object.figureId === figure.id);
+              if (match) selectObject(match);
+            }}
+          />
+        </div>
+      )}
+      {!result?.reveal && annotated && !annotationFailed && (
         <button
           type="button"
           className="annotation-toggle"
@@ -161,7 +180,7 @@ export default function Discovery({
         </button>
       )}
 
-      {!imageFailed && (
+      {!result?.reveal && !imageFailed && (
         <div
           className="verified-marker-plane"
           style={real ? imageFrame : { inset: 0 }}

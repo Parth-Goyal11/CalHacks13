@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./yonder-polish.css";
+import "./sky-reveal.css";
 
 export const metadata: Metadata = {
   title: "Yonder",
