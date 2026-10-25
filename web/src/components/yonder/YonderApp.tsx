@@ -20,9 +20,12 @@ import { identificationLabel, type SkyPhotoResult } from "./analysis";
 import { objectsFromResult, learningFor } from "./photo-discoveries";
 import { revealObjects } from "./reveal-analysis";
 import {
+  collectCreatures,
+  readCreatures,
   readMemories,
   writeMemory,
   removeMemory,
+  type StoredCreature,
   type StoredMemory,
 } from "./memory-store";
 import {
@@ -102,6 +105,7 @@ export default function YonderApp({
   const saveQueue = useRef(Promise.resolve());
   const [captureTarget, setCaptureTarget] = useState("");
   const [savedPhotos, setSavedPhotos] = useState<SkyPhoto[]>([]);
+  const [creatures, setCreatures] = useState<StoredCreature[]>([]);
   const [latestPhoto, setLatestPhoto] = useState<SkyPhoto | null>(null);
   const [profile, setProfile] = useState(defaultProfile);
   const [sheet, setSheet] = useState<
@@ -132,6 +136,8 @@ export default function YonderApp({
             };
           }),
         );
+        const collection = await readCreatures();
+        if (!cancelled) setCreatures(collection);
       } catch {
         if (!cancelled)
           setError(
@@ -275,6 +281,7 @@ export default function YonderApp({
   function completed(file: File, result: SkyPhotoResult) {
     const photo = capturedPhoto(file, result);
     remember(photo);
+    void collectCreatures(result).then(setCreatures).catch(() => undefined);
     setUploadedFile(null);
     setCameraOpen(false);
     setActivePhoto(photo);
@@ -389,6 +396,7 @@ export default function YonderApp({
             {activeTab === "memories" && (
               <MemoriesScreen
                 savedPhotos={savedPhotos}
+                creatures={creatures}
                 onOpen={openPhoto}
                 onCapture={openCamera}
               />

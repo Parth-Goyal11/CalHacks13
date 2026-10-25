@@ -1,12 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CONSTELLATION_PATTERNS } from "@calhacks13/lib";
 import type { BrightPoint, SceneSketch } from "@/lib/sample-scene";
 
 const EMPTY_POINTS: BrightPoint[] = [];
-
-const NAMES = CONSTELLATION_PATTERNS.map((pattern) => pattern.name);
 
 interface IdentifyScanProps {
   imageUrl: string;
@@ -16,53 +13,30 @@ interface IdentifyScanProps {
   onToggleMute: () => void;
 }
 
-function phaseCopy(elapsed: number, shown: number, total: number): { title: string; detail: string } {
+function phaseCopy(elapsed: number, total: number): { title: string } {
   if (total === 0 && elapsed < 2) {
-    return {
-      title: "Reading the frame",
-      detail: "Sampling light across the photo before any name is assigned.",
-    };
+    return { title: "Reading the frame" };
   }
   if (elapsed < 4) {
-    return {
-      title: "Pass A · bright anchors",
-      detail: `Locking the strongest lights${total ? ` · ${shown} of ${total}` : ""}.`,
-    };
+    return { title: "Bright anchors" };
   }
   if (elapsed < 9) {
-    const name = NAMES[Math.floor(elapsed / 1.6) % NAMES.length] ?? "the catalog";
-    return {
-      title: "Pass B · stick figures",
-      detail: `Comparing neighbor lights with ${name}.`,
-    };
+    return { title: "Stick figures" };
   }
-  if (elapsed < 14) {
-    return {
-      title: "Pass C · edges",
-      detail: "Checking corners for planets and stars that sit alone.",
-    };
-  }
-  return {
-    title: "Catalog match",
-    detail: "Holding the lights that fit. Names arrive when the match finishes.",
-  };
+  if (elapsed < 14) return { title: "Edges" };
+  return { title: "Catalog match" };
 }
 
 export function IdentifyScan({
   imageUrl,
   elapsed,
   sketch,
-  muted,
-  onToggleMute,
 }: IdentifyScanProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [reduced, setReduced] = useState(false);
   const points = sketch?.points ?? EMPTY_POINTS;
-  const shown = points.length === 0 ? 0 : Math.min(points.length, Math.max(1, Math.ceil(points.length * Math.min(1, elapsed / 11))));
-  const copy = phaseCopy(elapsed, shown, points.length);
-  const step =
-    elapsed < 4 ? 0 : elapsed < 9 ? 1 : elapsed < 14 ? 2 : 3;
+  const copy = phaseCopy(elapsed, points.length);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -156,42 +130,10 @@ export function IdentifyScan({
   }, [points, reduced]);
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-sky-300/80">
-            Identification · {elapsed}s
-          </p>
-          <h2 className="mt-1 text-xl font-semibold text-zinc-50">{copy.title}</h2>
-          <p className="mt-1 max-w-xl text-sm text-zinc-400">{copy.detail}</p>
-        </div>
-        <button
-          type="button"
-          onClick={onToggleMute}
-          className="rounded-full border border-zinc-700 bg-zinc-950/80 px-3 py-1.5 text-[11px] uppercase tracking-[0.14em] text-zinc-300 hover:text-zinc-100"
-        >
-          {muted ? "Play sky piece" : "Silence"}
-        </button>
-      </div>
-
-      <ol className="grid grid-cols-2 gap-2 text-[11px] uppercase tracking-[0.12em] sm:grid-cols-4">
-        {["Bright anchors", "Stick figures", "Edges", "Catalog match"].map((label, index) => (
-          <li
-            key={label}
-            className={`rounded-full border px-3 py-1 ${
-              index === step
-                ? "border-sky-300/70 bg-sky-400/15 text-sky-100"
-                : index < step
-                  ? "border-zinc-700 text-zinc-300"
-                  : "border-zinc-800 text-zinc-600"
-            }`}
-          >
-            {index < step ? "✓ " : ""}
-            {label}
-          </li>
-        ))}
-      </ol>
-
+    <section className="flex flex-col gap-3">
+      <p className="text-xs uppercase tracking-[0.18em] text-sky-300/80">
+        {copy.title} · {elapsed}s
+      </p>
       <div ref={stageRef} className="relative overflow-hidden rounded-lg border border-sky-500/20 bg-black">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={imageUrl} alt="Sky photo being identified" className="block h-auto w-full" />
@@ -201,17 +143,7 @@ export function IdentifyScan({
           style={{ mixBlendMode: "screen" }}
           aria-hidden
         />
-          <p className="absolute bottom-3 left-3 right-3 text-xs text-zinc-200/90" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.9)" }}>
-            {sketch == null
-              ? "Looking for points of light…"
-              : points.length
-                ? `${points.length} lights in this frame. Lines are guesses until the catalog answers.`
-                : "No sharp points stood out yet. The catalog match is still running."}
-          </p>
       </div>
-      <p className="text-xs text-zinc-500">
-        A quiet piece is playing from this photo’s color and light. It settles onto the named stars when they arrive.
-      </p>
     </section>
   );
 }

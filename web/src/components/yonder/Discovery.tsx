@@ -4,6 +4,8 @@
 import { useEffect, useRef, useState } from "react";
 import { annotationUrl, identificationLabel } from "./analysis";
 import { FeatureReveal } from "@/components/sky/FeatureReveal";
+import { creatureFromObject } from "./collection";
+import CreaturePortrait from "./CreaturePortrait";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import type { CelestialObject, SkyPhoto } from "./sky-data";
 import ObjectExplanation from "./ObjectExplanation";
@@ -328,6 +330,11 @@ export default function Discovery({
               <p>{selected.kind}{selected.motif ? ` · ${selected.motif}` : ""}</p>
               {selected.highlightRank && <span className="selected-highlight">#{selected.highlightRank} scored highlight · +{selected.highlightPoints ?? 0} pts</span>}
               <h2>{selected.name}</h2>
+              {creatureFromObject(selected) ? (
+                <p className="creature-tier">
+                  Tier {creatureFromObject(selected)?.tier} · {creatureFromObject(selected)?.perk}
+                </p>
+              ) : null}
             </div>
             <button
               ref={detailClose}
@@ -339,8 +346,17 @@ export default function Discovery({
               <SkyIcon name="close" />
             </button>
           </div>
-          <p className="object-detail">{selected.detail}</p>
-          {selected.highlightReason && <p className="highlight-reason">{selected.highlightReason}</p>}
+          {creatureFromObject(selected) ? (
+            <>
+              <CreaturePortrait creature={creatureFromObject(selected)!} />
+              <p className="creature-perk">{creatureFromObject(selected)?.perkDetail}</p>
+            </>
+          ) : null}
+          <details className="analysis-details">
+            <summary>About this pattern</summary>
+            <p className="object-detail">{selected.detail}</p>
+            {selected.highlightReason && <p className="highlight-reason">{selected.highlightReason}</p>}
+          </details>
           {result?.reveal && selected.figureId && <ObjectExplanation key={selected.id} reveal={result.reveal} figureId={selected.figureId} />}
           <div className="sheet-footer">
             <span>

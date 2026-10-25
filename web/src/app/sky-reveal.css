@@ -219,3 +219,91 @@
   z-index: 1;
   padding: 4px 12px 128px;
 }
+
+.creature-collection {
+  margin: 8px 16px 4px;
+  padding: 12px;
+  border: 1px solid rgba(255, 214, 120, 0.22);
+  border-radius: 16px;
+}
+
+.collection-heading,
+.creature-row,
+.tier-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.collection-heading {
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.collection-heading h2,
+.creature-tier,
+.creature-perk,
+.collection-empty {
+  margin: 0;
+}
+
+.collection-heading button,
+.creature-row button {
+  border: 1px solid rgba(255, 214, 120, 0.35);
+  background: transparent;
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 10px;
+}
+
+.creature-row button b {
+  margin-right: 6px;
+}
+
+.creature-row button.is-open {
+  background: rgba(255, 214, 120, 0.16);
+}
+
+.tier-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 10px;
+}
+
+.tier-list li {
+  display: grid;
+  gap: 2px;
+  min-width: 140px;
+  font-size: 13px;
+}
+
+.tier-list span,
+.collection-empty,
+.creature-perk {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+.creature-card,
+.creature-portrait {
+  margin-top: 10px;
+}
+
+.creature-portrait {
+  min-height: 160px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #07080d;
+}
+
+.creature-portrait img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.creature-portrait p,
+.creature-card p {
+  margin: 8px 0 0;
+}
