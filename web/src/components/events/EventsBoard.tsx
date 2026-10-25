@@ -30,24 +30,26 @@ async function fetchNearbyEvents(
     params.set("label", place.label);
   }
   const res = await fetch(`/api/celestial-events?${params}`);
+  if (!res.ok) throw new Error("Event request failed");
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to load events");
   return data.events as RankedCelestialEvent[];
 }
 
 async function searchEvents(q: string): Promise<RankedCelestialEvent[]> {
   const res = await fetch(`/api/search-events?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error("Search request failed");
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Search failed");
   return data.events as RankedCelestialEvent[];
 }
 
 export function EventsBoard({
   place,
+  locationChosen,
   onLocation,
   compact = false,
 }: {
   place: GeocodedPlace;
+  locationChosen: boolean;
   onLocation: () => void;
   /** When true, hide the large page title (Explore already has one). */
   compact?: boolean;
@@ -93,14 +95,14 @@ export function EventsBoard({
           prev && next.some((e) => e.id === prev) ? prev : null
         );
         if (searchActive) setRarityFilter("all");
-      } catch (e) {
+      } catch {
         if (id !== requestId.current || controller.signal.aborted) return;
+        setEvents([]);
+        setSelectedId(null);
         setError(
-          e instanceof Error
-            ? e.message
-            : searchActive
-              ? "Search failed"
-              : "Failed to load events"
+          searchActive
+            ? "Event search is unavailable. Please try again."
+            : "Sky events are unavailable. Please try again."
         );
       } finally {
         if (id === requestId.current && !controller.signal.aborted) {
@@ -165,8 +167,10 @@ export function EventsBoard({
   const activeBlurb =
     rarityFilter === "all"
       ? searchActive
-        ? "Semantic + keyword matches from Elasticsearch."
-        : "Sky targets near you — closest first. Pick a card or a globe pin."
+        ? "Search results, sorted by relevance."
+        : locationChosen
+          ? "Sky targets near you — closest first. Use Show on globe to explore a target."
+          : `Sky targets for the ${place.label} preview — choose your location for nearby results.`
       : RARITY_META[rarityFilter].blurb;
 
   return (
@@ -180,7 +184,9 @@ export function EventsBoard({
       ) : (
         <div className="section-heading">
           <h2 id="events-screen-title">Upcoming sky events</h2>
-          <span>{searchActive ? "Search" : "Near you"}</span>
+          <span>
+            {searchActive ? "Search" : locationChosen ? "Near you" : "Preview sky"}
+          </span>
         </div>
       )}
 
@@ -196,19 +202,25 @@ export function EventsBoard({
         {(searching || loading) && <small role="status">Looking…</small>}
       </label>
 
-      <button
-        type="button"
-        className="yonder-events-location"
-        onClick={onLocation}
-      >
-        <strong>{place.label}</strong>
-        <span>Change location</span>
-      </button>
+      {!compact && (
+        <button
+          type="button"
+          className="yonder-events-location"
+          onClick={onLocation}
+        >
+          <strong>
+            {locationChosen ? place.label : `${place.label} preview`}
+          </strong>
+          <span>{locationChosen ? "Change location" : "Choose location"}</span>
+        </button>
+      )}
 
-      <div className="yonder-rarity-row" role="toolbar" aria-label="Rarity filter">
+      {!error && (
+        <div className="yonder-rarity-row" role="group" aria-label="Rarity filter">
         <button
           type="button"
           className={`rarity-chip rarity-chip--all${rarityFilter === "all" ? " is-active" : ""}`}
+          aria-pressed={rarityFilter === "all"}
           onClick={() => setRarityFilter("all")}
         >
           <span className="rarity-chip-dot" aria-hidden />
@@ -220,6 +232,7 @@ export function EventsBoard({
             key={r}
             type="button"
             className={`rarity-chip rarity-chip--${r}${rarityFilter === r ? " is-active" : ""}`}
+            aria-pressed={rarityFilter === r}
             onClick={() => setRarityFilter(r)}
           >
             <span className="rarity-chip-dot" aria-hidden />
@@ -227,20 +240,24 @@ export function EventsBoard({
             <em>{counts[r]}</em>
           </button>
         ))}
-      </div>
-      <p className="yonder-events-blurb">{activeBlurb}</p>
+        </div>
+      )}
+      {!error && <p className="yonder-events-blurb">{activeBlurb}</p>}
 
-      <div className="yonder-events-tabs">
+      {!error && (
+        <div className="yonder-events-tabs">
         <button
           type="button"
           className={tab === "list" ? "is-active" : undefined}
+          aria-pressed={tab === "list"}
           onClick={() => setTab("list")}
         >
-          Closest list
+          {searchActive ? "Best matches" : "Closest list"}
         </button>
         <button
           type="button"
           className={tab === "globe" ? "is-active" : undefined}
+          aria-pressed={tab === "globe"}
           onClick={() => {
             setTab("globe");
             setGlobeFocusToken((k) => k + 1);
@@ -253,22 +270,24 @@ export function EventsBoard({
           className="yonder-events-refresh"
           disabled={loading || searching}
           onClick={() => {
-            setQuery("");
-            setDebouncedQuery("");
             setRefreshKey((k) => k + 1);
           }}
         >
           Refresh
         </button>
-      </div>
-
-      {error ? (
-        <div role="alert" className="yonder-events-error">
-          {error}
         </div>
-      ) : null}
+      )}
 
-      {tab === "globe" ? (
+      {error && (
+        <div className="yonder-events-error">
+          <p role="alert">{error}</p>
+          <button type="button" onClick={() => setRefreshKey((k) => k + 1)}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!error && (tab === "globe" ? (
         <div className="yonder-events-globe">
           <EventsGlobe
             events={visible}
@@ -333,8 +352,13 @@ export function EventsBoard({
                   className={`yonder-event-card${active ? " is-selected" : ""}`}
                   data-rarity={event.rarity}
                   data-kind={event.kind}
-                  onClick={() => setSelectedId(event.id)}
                 >
+                  <div className="yonder-event-card-heading">
+                    <h3>{event.title}</h3>
+                    <time dateTime={event.startsAt}>
+                      {formatWhen(event.startsAt)}
+                    </time>
+                  </div>
                   <div className="yonder-event-hero">
                     <EventSkyArt kind={event.kind} title={event.title} />
                     <div className="yonder-event-hero-overlay">
@@ -342,10 +366,8 @@ export function EventsBoard({
                         <button
                           type="button"
                           className={`rarity-chip rarity-chip--${event.rarity}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRarityFilter(event.rarity);
-                          }}
+                          aria-label={`Filter to ${RARITY_META[event.rarity].label} events`}
+                          onClick={() => setRarityFilter(event.rarity)}
                         >
                           <span className="rarity-chip-dot" aria-hidden />
                           {RARITY_META[event.rarity].label}
@@ -362,7 +384,6 @@ export function EventsBoard({
                     <span className="yonder-event-rank">#{index + 1}</span>
                   </div>
                   <div className="yonder-event-body">
-                    <h3>{event.title}</h3>
                     <p>{event.summary}</p>
                     <dl className="yonder-event-stats">
                       <div>
@@ -390,8 +411,7 @@ export function EventsBoard({
                       <button
                         type="button"
                         className="yonder-events-linkish"
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           setSelectedId(event.id);
                           setTab("globe");
                           setGlobeFocusToken((k) => k + 1);
@@ -406,16 +426,18 @@ export function EventsBoard({
             );
           })}
         </ul>
-      )}
+      ))}
 
-      {loading && !searchActive ? (
+      {!error && loading && !searchActive ? (
         <p className="yonder-events-empty" role="status">
           Loading sky events…
         </p>
       ) : null}
-      {!loading && !searching && visible.length === 0 ? (
+      {!error && !loading && !searching && visible.length === 0 ? (
         <p className="yonder-events-empty">
-          Nothing in this window — try another rarity or clear search.
+          {searchActive
+            ? "No events match that search. Try different words or another rarity."
+            : "No events match this location and rarity. Try another category or location."}
         </p>
       ) : null}
     </div>

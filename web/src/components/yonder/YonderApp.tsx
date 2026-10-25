@@ -307,6 +307,7 @@ export default function YonderApp({
             {activeTab === "explore" && (
               <ExploreScreen
                 place={sky.place}
+                locationChosen={sky.chosen}
                 weather={sky.weather}
                 weatherError={sky.weatherError}
                 onRetry={sky.retry}
@@ -336,6 +337,7 @@ export default function YonderApp({
                 <button type="button" className="events-back" onClick={() => navigate("explore")}>← Back to Explore</button>
                 <EventsBoard
                   place={eventsPlace}
+                  locationChosen={sky.chosen}
                   onLocation={() => setSheet("location")}
                 />
               </section>
@@ -627,6 +629,7 @@ function HomeScreen({
 
 function ExploreScreen({
   place,
+  locationChosen,
   weather,
   weatherError,
   onRetry,
@@ -634,6 +637,7 @@ function ExploreScreen({
   eventsPlace,
 }: {
   place: Place;
+  locationChosen: boolean;
   weather: CurrentWeather | null;
   weatherError: boolean;
   onRetry: () => void;
@@ -657,9 +661,13 @@ function ExploreScreen({
             className="eyebrow location-text"
             onClick={onLocation}
           >
-            {place.name} · {coordinateLabel(place)}
+            {locationChosen
+              ? `${place.name} · ${coordinateLabel(place)}`
+              : `Showing ${place.name} preview · choose location`}
           </button>
-          <h1 id="explore-title">Made for your sky</h1>
+          <h1 id="explore-title">
+            {locationChosen ? "Made for your sky" : "Explore the night sky"}
+          </h1>
         </div>
         <span className="sky-condition">{conditionLabel(weather)}</span>
       </header>
@@ -688,6 +696,7 @@ function ExploreScreen({
       </div>
       <EventsBoard
         place={eventsPlace}
+        locationChosen={locationChosen}
         onLocation={onLocation}
         compact
       />
