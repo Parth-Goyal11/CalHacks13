@@ -161,6 +161,24 @@ export async function saveCreatureImage(draft: StoredCreature, image: Blob): Pro
   await writeCreature(next);
 }
 
+export async function collectOne(creature: StoredCreature): Promise<StoredCreature[]> {
+  const current = await readCreatures();
+  const byId = new Map(current.map((item) => [item.id, item]));
+  const previous = byId.get(creature.id);
+  if (!previous || tierRank(creature.tier) > tierRank(previous.tier)) {
+    const next = {
+      ...creature,
+      image: previous?.image,
+      caughtAt: new Date().toISOString(),
+    };
+    byId.set(creature.id, next);
+    await writeCreature(next);
+  }
+  return [...byId.values()].sort(
+    (a, b) => tierRank(b.tier) - tierRank(a.tier) || a.name.localeCompare(b.name),
+  );
+}
+
 export async function collectCreatures(result: SkyPhotoResult): Promise<StoredCreature[]> {
   const incoming = creaturesFrom(result);
   if (!incoming.length) return readCreatures();

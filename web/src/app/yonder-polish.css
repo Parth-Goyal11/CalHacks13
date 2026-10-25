@@ -2023,3 +2023,98 @@ summary:focus-visible {
   color: rgb(243 240 232 / 0.58);
   font-size: 10px;
 }
+
+.night-sky {
+  display: grid;
+  gap: 10px;
+  margin: 4px 0 16px;
+}
+
+.night-sky-heading p,
+.night-sky-note {
+  margin: 0;
+  color: rgb(243 240 232 / 0.68);
+  font-size: 13px;
+}
+
+.night-sky-heading h2 {
+  margin: 2px 0 0;
+  font-size: 22px;
+}
+
+.night-sky-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  max-height: 68vh;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #05070c;
+}
+
+.night-sky-stage video,
+.night-sky-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.night-sky-stage video {
+  object-fit: cover;
+}
+
+.night-sky-stage:not(.has-camera) video {
+  display: none;
+}
+
+.night-sky-aim,
+.night-sky-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.night-sky-aim label {
+  display: grid;
+  gap: 4px;
+  color: rgb(243 240 232 / 0.72);
+  font-size: 13px;
+}
+
+.night-sky-actions {
+  grid-template-columns: 1fr 1fr;
+}
+
+.night-sky-actions button,
+.night-sky-card {
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+}
+
+.night-sky-actions button {
+  padding: 10px 8px;
+}
+
+.night-sky-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 12px;
+}
+
+.night-sky-card div {
+  display: grid;
+  gap: 2px;
+}
+
+.night-sky-card dt {
+  color: rgb(226 177 90 / 0.9);
+  font-size: 12px;
+}
+
+.night-sky-card dd {
+  margin: 0;
+}

@@ -4,8 +4,10 @@
 import { useEffect, useRef, useState } from "react";
 import { annotationUrl, identificationLabel } from "./analysis";
 import { FeatureReveal } from "@/components/sky/FeatureReveal";
-import { creatureFromObject } from "./collection";
+import { creatureFromObject, qualityTracks } from "./collection";
+import ConstellationMap from "./ConstellationMap";
 import CreaturePortrait from "./CreaturePortrait";
+import type { StoredCreature } from "./collection";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import type { CelestialObject, SkyPhoto } from "./sky-data";
 import ObjectExplanation from "./ObjectExplanation";
@@ -17,6 +19,7 @@ export type DiscoveryProps = {
   error?: string;
   onSave: () => void;
   onClose: () => void;
+  onCreature?: (creature: StoredCreature) => void;
 };
 
 export default function Discovery({
@@ -26,6 +29,7 @@ export default function Discovery({
   error,
   onSave,
   onClose,
+  onCreature,
 }: {
   photo: SkyPhoto;
   saved: boolean;
@@ -33,6 +37,7 @@ export default function Discovery({
   error?: string;
   onSave: () => void;
   onClose: () => void;
+  onCreature?: (creature: StoredCreature) => void;
 }) {
   const [selected, setSelected] = useState<CelestialObject | null>(null);
   const [analysisOpen, setAnalysisOpen] = useState(false);
@@ -168,6 +173,7 @@ export default function Discovery({
               const match = photo.objects.find((object) => object.figureId === figure.id);
               if (match) selectObject(match);
             }}
+            onCreature={onCreature}
           />
         </div>
       )}
@@ -347,10 +353,24 @@ export default function Discovery({
             </button>
           </div>
           {creatureFromObject(selected) ? (
-            <>
-              <CreaturePortrait creature={creatureFromObject(selected)!} />
-              <p className="creature-perk">{creatureFromObject(selected)?.perkDetail}</p>
-            </>
+            <div className={`caught-pair tier-${creatureFromObject(selected)!.tier.toLowerCase()}`}>
+              <ConstellationMap
+                name={selected.name}
+                tier={creatureFromObject(selected)!.tier}
+                progress={1}
+                accent={creatureFromObject(selected)!.accent}
+              />
+              <div>
+                <CreaturePortrait creature={creatureFromObject(selected)!} />
+                <ul className="quality-tracks">
+                  {(creatureFromObject(selected)!.tracks ?? qualityTracks(creatureFromObject(selected)!)).map((track) => (
+                    <li key={track.key}>
+                      <span>{track.label}</span> {track.value}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           ) : null}
           <details className="analysis-details">
             <summary>About this pattern</summary>

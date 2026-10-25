@@ -15,16 +15,16 @@ interface IdentifyScanProps {
 
 function phaseCopy(elapsed: number, total: number): { title: string } {
   if (total === 0 && elapsed < 2) {
-    return { title: "Reading the frame" };
+    return { title: "A creature is gathering" };
   }
   if (elapsed < 4) {
-    return { title: "Bright anchors" };
+    return { title: "Stars become a body" };
   }
   if (elapsed < 9) {
-    return { title: "Stick figures" };
+    return { title: "The outline is forming" };
   }
-  if (elapsed < 14) return { title: "Edges" };
-  return { title: "Catalog match" };
+  if (elapsed < 14) return { title: "The body is closing" };
+  return { title: "The creature is taking a name" };
 }
 
 export function IdentifyScan({
@@ -141,6 +141,11 @@ export function IdentifyScan({
           ref={canvasRef}
           className="pointer-events-none absolute inset-0 h-full w-full"
           style={{ mixBlendMode: "screen" }}
+          aria-hidden
+        />
+        <div
+          className="scan-creature"
+          style={{ ["--form" as string]: String(Math.min(1, elapsed / 12)) }}
           aria-hidden
         />
       </div>

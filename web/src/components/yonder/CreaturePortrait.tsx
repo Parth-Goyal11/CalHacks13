@@ -9,14 +9,14 @@ export default function CreaturePortrait({ creature }: { creature: StoredCreatur
   const draftRef = useRef(creature);
   draftRef.current = creature;
   const [url, setUrl] = useState<string | null>(null);
-  const [status, setStatus] = useState("Rendering the creature model…");
+  const [status, setStatus] = useState("Forming…");
 
   useEffect(() => {
     let cancel = false;
     let objectUrl = "";
     const draft = draftRef.current;
     setUrl(null);
-    setStatus("Rendering the creature model…");
+    setStatus("Forming…");
 
     async function load() {
       const stored = await readCreature(id);

@@ -15,6 +15,7 @@ import MemoriesScreen from "./MemoriesScreen";
 import CameraFlow from "./CameraFlow";
 import Discovery from "./Discovery";
 import SkyFinder from "./SkyFinder";
+import NightSkyMap from "./NightSkyMap";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import { IMG, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
@@ -22,6 +23,7 @@ import { objectsFromResult, learningFor } from "./photo-discoveries";
 import { revealObjects } from "./reveal-analysis";
 import {
   collectCreatures,
+  collectOne,
   readCreatures,
   readMemories,
   writeMemory,
@@ -296,6 +298,9 @@ export default function YonderApp({
     pendingCapture.current = null;
     remember(capturedPhoto(file));
   }
+  function formedCreature(creature: Parameters<typeof collectOne>[0]) {
+    void collectOne(creature).then(setCreatures).catch(() => undefined);
+  }
   function completed(file: File, result: SkyPhotoResult) {
     const photo = capturedPhoto(file, result);
     remember(photo);
@@ -479,6 +484,7 @@ export default function YonderApp({
             error={error}
             onSave={() => void toggleSave()}
             onClose={closeOverlay}
+            onCreature={formedCreature}
           />
         )}
         {sheet === "location" && (
@@ -845,6 +851,11 @@ function ExploreScreen({
           <span role="status">Checking the sky…</span>
         )}
       </div>
+      <NightSkyMap
+        latitude={place.latitude}
+        longitude={place.longitude}
+        placeName={place.name}
+      />
       <button
         type="button"
         className="sky-finder-launch"

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SignificantFeature, SkyAnalysis, SkyFigure } from "@calhacks13/lib";
 import { figureIdentity } from "@calhacks13/lib";
+import { creatureFromObject, type StoredCreature } from "@/components/yonder/collection";
+import CreatureCatch from "@/components/yonder/CreatureCatch";
 import { SkyOverlay } from "./SkyOverlay";
 
 const BEAT_MS = 2400;
@@ -22,6 +24,8 @@ interface FeatureRevealProps {
   frameRarity?: string | null;
   /** Fired once each catch lands in the diagram. */
   onCatch?: (feature: SignificantFeature) => void;
+  /** Fired once a constellation's creature has finished forming. */
+  onCreature?: (creature: StoredCreature) => void;
 }
 
 export function FeatureReveal({
@@ -34,11 +38,27 @@ export function FeatureReveal({
   revealedStarIds = null,
   onSettled,
   onCatch,
+  onCreature,
 }: FeatureRevealProps) {
   // Weakest first so the highest-point catch lands last.
   const order = useMemo(
     () => [...highlights].sort((a, b) => a.points - b.points || b.rank - a.rank),
     [highlights],
+  );
+  const creatures = useMemo(
+    () =>
+      order.map((feature) =>
+        creatureFromObject({
+          id: feature.figureId,
+          name: feature.figureName,
+          kind: feature.kind,
+          detail: "",
+          motif: figureIdentity(feature.figureName, feature.kind).motif,
+          accent: figureIdentity(feature.figureName, feature.kind).accent,
+          highlightPoints: feature.points,
+        }),
+      ),
+    [order],
   );
   const [step, setStep] = useState(0);
   const [reduced, setReduced] = useState(false);
@@ -99,10 +119,40 @@ export function FeatureReveal({
     setStep(settledAt);
   }
 
+  const forming = showingFeature ? creatures[featureIndex] ?? null : null;
+  const shownCreatures = (settled || reduced ? creatures : creatures.slice(0, Math.max(featureIndex, 0))).filter(
+    (creature): creature is StoredCreature => creature !== null,
+  );
+
   void totalPoints;
 
   return (
     <div className="flex flex-col gap-3">
+      <section className="catch-hero" aria-label="Creatures forming from this sky">
+        {forming ? (
+          <CreatureCatch
+            key={forming.id}
+            creature={forming}
+            durationMs={BEAT_MS}
+            settle={false}
+            onFormed={onCreature}
+          />
+        ) : null}
+        {shownCreatures
+          .filter((creature) => creature.id !== forming?.id)
+          .map((creature) => (
+            <CreatureCatch
+              key={creature.id}
+              creature={creature}
+              durationMs={BEAT_MS}
+              settle
+              onFormed={onCreature}
+            />
+          ))}
+        {!forming && shownCreatures.length === 0 ? (
+          <p className="catch-added">The creature is gathering.</p>
+        ) : null}
+      </section>
       <p className="text-xs uppercase tracking-[0.16em] text-amber-200/70">
         Tap a pattern
       </p>

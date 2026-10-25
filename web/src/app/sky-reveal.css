@@ -307,3 +307,131 @@
 .creature-card p {
   margin: 8px 0 0;
 }
+
+.catch-hero,
+.catch-pair,
+.caught-pair {
+  display: grid;
+  gap: 10px;
+}
+
+.catch-pair,
+.caught-pair {
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+
+.constellation-map {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+  background: #07080d;
+}
+
+.constellation-map.tier-f {
+  opacity: 0.5;
+}
+
+.forming-portrait img {
+  opacity: var(--form, 1);
+  filter: blur(calc((1 - var(--form, 1)) * 14px));
+}
+
+.tier-f .forming-portrait img,
+.tier-f .creature-portrait img {
+  opacity: calc(0.28 + var(--form, 1) * 0.35);
+  filter: grayscale(1) contrast(0.62) blur(calc((1 - var(--form, 1)) * 10px));
+}
+
+.tier-s .forming-portrait img,
+.tier-s .creature-portrait img {
+  opacity: var(--form, 1);
+  filter: blur(calc((1 - var(--form, 1)) * 16px)) saturate(calc(0.25 + var(--form, 1) * 1.15));
+}
+
+.tier-s.catch-pair,
+.tier-s.caught-pair,
+.collection-entry.tier-s {
+  border: 1px solid rgba(255, 214, 120, 0.7);
+  box-shadow: 0 0 24px rgba(255, 196, 92, 0.28);
+  background: radial-gradient(circle at 20% 0%, rgba(255, 214, 120, 0.16), transparent 55%);
+}
+
+.catch-name,
+.catch-added,
+.quality-tracks {
+  margin: 6px 0 0;
+}
+
+.quality-tracks {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.quality-tracks span {
+  display: inline-block;
+  min-width: 52px;
+  color: rgba(255, 214, 120, 0.85);
+}
+
+.tier-f .quality-tracks {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.creature-row {
+  display: grid;
+  gap: 12px;
+}
+
+.creature-row .collection-entry {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+  text-align: left;
+  border-radius: 14px;
+  padding: 8px;
+}
+
+.collection-entry.tier-f {
+  grid-template-columns: 64px 1fr;
+  filter: grayscale(1);
+  opacity: 0.72;
+}
+
+.collection-entry.tier-s {
+  grid-template-columns: 140px 1fr;
+  padding: 12px;
+}
+
+.collection-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.collection-copy small,
+.catch-added {
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+}
+
+.scan-creature {
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  top: 18%;
+  bottom: 16%;
+  border-radius: 46% 46% 40% 40%;
+  background:
+    radial-gradient(circle at 50% 22%, rgba(255, 248, 230, 0.55), transparent 28%),
+    radial-gradient(circle at 50% 58%, rgba(186, 230, 253, 0.28), transparent 62%);
+  mix-blend-mode: screen;
+  pointer-events: none;
+  opacity: var(--form, 0);
+  transform: scale(calc(0.35 + var(--form, 0) * 0.65));
+  transform-origin: center 70%;
+}
