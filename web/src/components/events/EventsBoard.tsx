@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { RankedCelestialEvent } from "@calhacks13/lib";
 import type { GeocodedPlace } from "@/components/sky/location-types";
+import { EventSkyArt } from "./EventSkyArt";
 import { EventsGlobe } from "./EventsGlobe";
 import {
   byClosest,
@@ -13,9 +14,9 @@ import {
   type RarityFilter,
 } from "./event-ui";
 
-type MainTab = "rarity" | "globe";
+type BoardTab = "list" | "globe";
 
-async function fetchEvents(
+async function fetchNearbyEvents(
   place: GeocodedPlace | null
 ): Promise<RankedCelestialEvent[]> {
   const params = new URLSearchParams({
@@ -34,53 +35,87 @@ async function fetchEvents(
   return data.events as RankedCelestialEvent[];
 }
 
+async function searchEvents(q: string): Promise<RankedCelestialEvent[]> {
+  const res = await fetch(`/api/search-events?q=${encodeURIComponent(q)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Search failed");
+  return data.events as RankedCelestialEvent[];
+}
+
 export function EventsBoard({
   place,
   onLocation,
-  onCapture,
+  compact = false,
 }: {
   place: GeocodedPlace;
   onLocation: () => void;
-  onCapture: (target?: string) => void;
+  /** When true, hide the large page title (Explore already has one). */
+  compact?: boolean;
 }) {
   const [rarityFilter, setRarityFilter] = useState<RarityFilter>("all");
-  const [tab, setTab] = useState<MainTab>("rarity");
+  const [tab, setTab] = useState<BoardTab>("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [globeFocusToken, setGlobeFocusToken] = useState(0);
   const [events, setEvents] = useState<RankedCelestialEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [searching, setSearching] = useState(false);
   const cardRefs = useRef<Map<string, HTMLLIElement>>(new Map());
+  const requestId = useRef(0);
+
+  const searchActive = debouncedQuery.trim().length >= 2;
+  // Stable key so parent re-creating the place object doesn't wipe search results.
+  const placeKey = `${place.latitude.toFixed(5)},${place.longitude.toFixed(5)}`;
 
   useEffect(() => {
-    let cancelled = false;
+    const handle = setTimeout(() => setDebouncedQuery(query.trim()), 400);
+    return () => clearTimeout(handle);
+  }, [query]);
+
+  useEffect(() => {
+    const id = ++requestId.current;
+    const controller = new AbortController();
 
     async function load() {
       setLoading(true);
+      setSearching(searchActive);
       setError(null);
       try {
-        const next = await fetchEvents(place);
-        if (!cancelled) {
-          setEvents(next);
-          setSelectedId((prev) =>
-            prev && next.some((e) => e.id === prev) ? prev : null
-          );
-        }
+        const next = searchActive
+          ? await searchEvents(debouncedQuery.trim())
+          : await fetchNearbyEvents(place);
+        if (id !== requestId.current || controller.signal.aborted) return;
+        setEvents(next);
+        setSelectedId((prev) =>
+          prev && next.some((e) => e.id === prev) ? prev : null
+        );
+        if (searchActive) setRarityFilter("all");
       } catch (e) {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Failed to load events");
-        }
+        if (id !== requestId.current || controller.signal.aborted) return;
+        setError(
+          e instanceof Error
+            ? e.message
+            : searchActive
+              ? "Search failed"
+              : "Failed to load events"
+        );
       } finally {
-        if (!cancelled) setLoading(false);
+        if (id === requestId.current && !controller.signal.aborted) {
+          setLoading(false);
+          setSearching(false);
+        }
       }
     }
 
     void load();
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [place, refreshKey]);
+    // placeKey (not place object identity) drives nearby reloads
+  }, [placeKey, place, refreshKey, debouncedQuery, searchActive]);
 
   const counts = useMemo(() => {
     const c: Record<RarityFilter, number> = {
@@ -100,18 +135,25 @@ export function EventsBoard({
       rarityFilter === "all"
         ? events
         : events.filter((e) => e.rarity === rarityFilter);
+    // Nearby: closest first. Search: keep Elasticsearch relevance order.
+    if (searchActive) {
+      return [...filtered].sort((a, b) => b.sortScore - a.sortScore);
+    }
     return [...filtered].sort(byClosest);
-  }, [events, rarityFilter]);
+  }, [events, rarityFilter, searchActive]);
 
   const selected = useMemo(
     () => events.find((e) => e.id === selectedId) ?? null,
     [events, selectedId]
   );
 
-  function selectEvent(event: RankedCelestialEvent, opts?: { openList?: boolean }) {
+  function selectEvent(
+    event: RankedCelestialEvent,
+    opts?: { openList?: boolean }
+  ) {
     setSelectedId(event.id);
     setRarityFilter(event.rarity);
-    if (opts?.openList) setTab("rarity");
+    if (opts?.openList) setTab("list");
     requestAnimationFrame(() => {
       cardRefs.current.get(event.id)?.scrollIntoView({
         behavior: "smooth",
@@ -120,309 +162,262 @@ export function EventsBoard({
     });
   }
 
-  function selectFromList(event: RankedCelestialEvent) {
-    setSelectedId(event.id);
-    // Keep rarity filter if All, or jump to that rarity when browsing a category
-  }
-
   const activeBlurb =
     rarityFilter === "all"
-      ? "Sky targets you can photograph — closest first. Click a card or a globe pin."
+      ? searchActive
+        ? "Semantic + keyword matches from Elasticsearch."
+        : "Sky targets near you — closest first. Pick a card or a globe pin."
       : RARITY_META[rarityFilter].blurb;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="max-w-xl">
-          <p className="text-xs uppercase tracking-[0.2em] text-amber-400/80">
-            Visible sky events
-          </p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-50 sm:text-4xl">
-            What can you catch next?
-          </h1>
-          <p className="mt-3 text-base leading-relaxed text-zinc-400">
-            Browse by rarity or explore the globe — selecting on either side
-            highlights the other.
-          </p>
+    <div className={`yonder-events${compact ? " yonder-events--compact" : ""}`}>
+      {!compact ? (
+        <header className="yonder-events-intro">
+          <p className="eyebrow">Visible sky events</p>
+          <h2 id="events-screen-title">What can you catch next?</h2>
+          <p>Browse by rarity or the globe — both stay in sync.</p>
+        </header>
+      ) : (
+        <div className="section-heading">
+          <h2 id="events-screen-title">Upcoming sky events</h2>
+          <span>{searchActive ? "Search" : "Near you"}</span>
         </div>
+      )}
+
+      <label className="yonder-events-search">
+        <span className="sr-only">Search events</span>
+        <input
+          type="search"
+          value={query}
+          placeholder="Search events (e.g. meteor, eclipse)…"
+          autoComplete="off"
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {(searching || loading) && <small role="status">Looking…</small>}
+      </label>
+
+      <button
+        type="button"
+        className="yonder-events-location"
+        onClick={onLocation}
+      >
+        <strong>{place.label}</strong>
+        <span>Change location</span>
+      </button>
+
+      <div className="yonder-rarity-row" role="toolbar" aria-label="Rarity filter">
         <button
           type="button"
-          onClick={() => onCapture()}
-          className="shrink-0 rounded-md bg-sky-500 px-4 py-2.5 text-center text-sm font-semibold !text-zinc-950 transition hover:bg-sky-400"
-        >Capture one</button>
-      </header>
-
-      {/* Shared rarity chips — drive both list + globe */}
-      <div>
-        <p className="mb-2 text-xs uppercase tracking-wider text-zinc-500">
-          Rarity filter
-        </p>
-        <div className="flex flex-wrap gap-2">
+          className={`rarity-chip rarity-chip--all${rarityFilter === "all" ? " is-active" : ""}`}
+          onClick={() => setRarityFilter("all")}
+        >
+          <span className="rarity-chip-dot" aria-hidden />
+          All
+          <em>{counts.all}</em>
+        </button>
+        {RARITY_ORDER.map((r) => (
           <button
+            key={r}
             type="button"
-            onClick={() => setRarityFilter("all")}
-            className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-              rarityFilter === "all"
-                ? "border-sky-300 bg-sky-300 text-zinc-950"
-                : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
-            }`}
+            className={`rarity-chip rarity-chip--${r}${rarityFilter === r ? " is-active" : ""}`}
+            onClick={() => setRarityFilter(r)}
           >
-            All ({counts.all})
+            <span className="rarity-chip-dot" aria-hidden />
+            {RARITY_META[r].label}
+            <em>{counts[r]}</em>
           </button>
-          {RARITY_ORDER.map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => setRarityFilter(r)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                rarityFilter === r
-                  ? RARITY_META[r].active
-                  : RARITY_META[r].chip
-              }`}
-            >
-              {RARITY_META[r].label} ({counts[r]})
-            </button>
-          ))}
-        </div>
-        <p className="mt-2 text-sm text-zinc-500">{activeBlurb}</p>
+        ))}
       </div>
+      <p className="yonder-events-blurb">{activeBlurb}</p>
 
-      {/* Interconnected tabs */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-zinc-800 pb-px">
+      <div className="yonder-events-tabs">
         <button
           type="button"
-          onClick={() => setTab("rarity")}
-          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
-            tab === "rarity"
-              ? "border-sky-400 text-sky-200"
-              : "border-transparent text-zinc-500 hover:text-zinc-300"
-          }`}
+          className={tab === "list" ? "is-active" : undefined}
+          onClick={() => setTab("list")}
         >
           Closest list
         </button>
         <button
           type="button"
+          className={tab === "globe" ? "is-active" : undefined}
           onClick={() => {
             setTab("globe");
-            setRefreshKey((k) => k + 1);
             setGlobeFocusToken((k) => k + 1);
           }}
-          className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
-            tab === "globe"
-              ? "border-sky-400 text-sky-200"
-              : "border-transparent text-zinc-500 hover:text-zinc-300"
-          }`}
         >
           Globe map
         </button>
         <button
           type="button"
-          onClick={() => setRefreshKey((k) => k + 1)}
-          disabled={loading}
-          className="ml-auto text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50"
+          className="yonder-events-refresh"
+          disabled={loading || searching}
+          onClick={() => {
+            setQuery("");
+            setDebouncedQuery("");
+            setRefreshKey((k) => k + 1);
+          }}
         >
-          {loading ? "Refreshing…" : "Refresh"}
+          Refresh
         </button>
       </div>
 
       {error ? (
-        <div
-          role="alert"
-          className="rounded-md border border-rose-900/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
-        >
+        <div role="alert" className="yonder-events-error">
           {error}
         </div>
       ) : null}
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-        <div className="min-w-0">
-          {tab === "globe" ? (
-            <div className="flex flex-col gap-3">
-              <EventsGlobe
-                events={visible}
-                place={place}
-                selectedId={selectedId}
-                focusToken={globeFocusToken}
-                onSelect={(event) => selectEvent(event, { openList: false })}
-              />
-              {selected ? (
-                <div className="rounded-xl border border-sky-800/50 bg-sky-950/20 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wider text-sky-400/80">
-                        Selected on globe
-                      </p>
-                      <h2 className="mt-1 text-lg font-semibold text-zinc-50">
-                        {selected.title}
-                      </h2>
-                      <p className="mt-1 text-sm text-zinc-400">
-                        {selected.summary}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => selectEvent(selected, { openList: true })}
-                      className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-200 hover:border-zinc-500"
-                    >
-                      Open in list →
-                    </button>
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => onCapture(selected.title)} className="rounded-md bg-zinc-100 px-3 py-2 text-xs font-semibold !text-zinc-950 hover:bg-white">Photograph this event</button>
-                    <span className="self-center text-xs text-zinc-500">
-                      {formatDistance(selected)} · {formatWhen(selected.startsAt)}
-                    </span>
+      {tab === "globe" ? (
+        <div className="yonder-events-globe">
+          <EventsGlobe
+            events={visible}
+            place={place}
+            selectedId={selectedId}
+            focusToken={globeFocusToken}
+            onSelect={(event) => selectEvent(event, { openList: false })}
+          />
+          {selected ? (
+            <article
+              className="yonder-event-card is-selected"
+              data-rarity={selected.rarity}
+              data-kind={selected.kind}
+            >
+              <div className="yonder-event-hero">
+                <EventSkyArt kind={selected.kind} title={selected.title} />
+                <div className="yonder-event-hero-overlay">
+                  <span className="yonder-event-kind">Selected on globe</span>
+                  <div className="yonder-event-points">
+                    <strong>+{selected.points}</strong>
+                    <span>pts</span>
                   </div>
                 </div>
-              ) : (
-                <p className="text-sm text-zinc-500">
-                  Click a glowing point on the globe. Rarity chips filter both
-                  views.
+              </div>
+              <div className="yonder-event-body">
+                <h3>{selected.title}</h3>
+                <p>{selected.summary}</p>
+                <p className="yonder-event-meta">
+                  {formatDistance(selected)} · {formatWhen(selected.startsAt)}
                 </p>
-              )}
-            </div>
+                {selected.photoTip ? (
+                  <p className="yonder-event-tip">{selected.photoTip}</p>
+                ) : null}
+                <button
+                  type="button"
+                  className="yonder-events-linkish"
+                  onClick={() => selectEvent(selected, { openList: true })}
+                >
+                  Open in list →
+                </button>
+              </div>
+            </article>
           ) : (
-            <div className="flex flex-col gap-3">
-              {!place ? (
-                <p className="rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-sm text-zinc-500">
-                  Set your location so launches / eclipses / ISS can sort by
-                  distance. Moons & showers count as in your sky.
-                </p>
-              ) : null}
-
-              <ul className="flex flex-col gap-3">
-                {visible.map((event, index) => {
-                  const meta = RARITY_META[event.rarity];
-                  const active = selectedId === event.id;
-                  return (
-                    <li
-                      key={event.id}
-                      ref={(node) => {
-                        if (node) cardRefs.current.set(event.id, node);
-                        else cardRefs.current.delete(event.id);
-                      }}
-                      className={`cursor-pointer rounded-xl border p-4 transition ${
-                        active
-                          ? "border-sky-500/70 bg-sky-950/30 ring-1 ring-sky-500/30"
-                          : "border-zinc-800 bg-zinc-950/70 hover:border-zinc-700"
-                      }`}
-                      onClick={() => selectFromList(event)}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono text-[10px] text-zinc-600">
-                              #{index + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRarityFilter(event.rarity);
-                              }}
-                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${meta.chip}`}
-                            >
-                              {meta.label}
-                            </button>
-                            <span className="text-[10px] uppercase tracking-wider text-zinc-600">
-                              {event.kind.replace(/_/g, " ")}
-                            </span>
-                          </div>
-                          <h2 className="mt-2 text-lg font-semibold text-zinc-50">
-                            {event.title}
-                          </h2>
-                          <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-                            {event.summary}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-semibold tabular-nums text-amber-300/90">
-                            +{event.points}
-                          </p>
-                          <p className="text-[10px] uppercase tracking-wider text-zinc-600">
-                            pts
-                          </p>
-                        </div>
-                      </div>
-
-                      <dl className="mt-4 grid gap-2 text-xs text-zinc-500 sm:grid-cols-3">
-                        <div>
-                          <dt className="uppercase tracking-wider text-zinc-600">
-                            When
-                          </dt>
-                          <dd className="mt-0.5 text-zinc-300">
-                            {formatWhen(event.startsAt)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="uppercase tracking-wider text-zinc-600">
-                            Distance
-                          </dt>
-                          <dd className="mt-0.5 text-zinc-300">
-                            {formatDistance(event)}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt className="uppercase tracking-wider text-zinc-600">
-                            Best view
-                          </dt>
-                          <dd className="mt-0.5 truncate text-zinc-300">
-                            {event.location?.label ??
-                              (event.globalVisibility
-                                ? "Anywhere with clear night sky"
-                                : "—")}
-                          </dd>
-                        </div>
-                      </dl>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button type="button" onClick={(e) => { e.stopPropagation(); onCapture(event.title); }} className="inline-flex rounded-md bg-zinc-100 px-3 py-2 text-xs font-semibold !text-zinc-950 transition hover:bg-white">Photograph this event</button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedId(event.id);
-                            setTab("globe");
-                          }}
-                          className="rounded-md border border-zinc-700 px-3 py-2 text-xs text-zinc-300 hover:border-zinc-500"
-                        >
-                          Show on globe
-                        </button>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-
-              {loading ? (
-                <p className="text-sm text-zinc-500">Loading sky events…</p>
-              ) : null}
-              {!loading && visible.length === 0 ? (
-                <p className="text-sm text-zinc-500">
-                  Nothing in this rarity window — try another category.
-                </p>
-              ) : null}
-            </div>
+            <p className="yonder-events-empty">
+              Tap a glowing point on the globe. Rarity chips filter both views.
+            </p>
           )}
         </div>
+      ) : (
+        <ul className="yonder-event-list">
+          {visible.map((event, index) => {
+            const active = selectedId === event.id;
+            return (
+              <li
+                key={event.id}
+                ref={(node) => {
+                  if (node) cardRefs.current.set(event.id, node);
+                  else cardRefs.current.delete(event.id);
+                }}
+              >
+                <article
+                  className={`yonder-event-card${active ? " is-selected" : ""}`}
+                  data-rarity={event.rarity}
+                  data-kind={event.kind}
+                  onClick={() => setSelectedId(event.id)}
+                >
+                  <div className="yonder-event-hero">
+                    <EventSkyArt kind={event.kind} title={event.title} />
+                    <div className="yonder-event-hero-overlay">
+                      <div className="yonder-event-badges">
+                        <button
+                          type="button"
+                          className={`rarity-chip rarity-chip--${event.rarity}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRarityFilter(event.rarity);
+                          }}
+                        >
+                          <span className="rarity-chip-dot" aria-hidden />
+                          {RARITY_META[event.rarity].label}
+                        </button>
+                        <span className="yonder-event-kind">
+                          {event.kind.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      <div className="yonder-event-points">
+                        <strong>+{event.points}</strong>
+                        <span>pts</span>
+                      </div>
+                    </div>
+                    <span className="yonder-event-rank">#{index + 1}</span>
+                  </div>
+                  <div className="yonder-event-body">
+                    <h3>{event.title}</h3>
+                    <p>{event.summary}</p>
+                    <dl className="yonder-event-stats">
+                      <div>
+                        <dt>When</dt>
+                        <dd>{formatWhen(event.startsAt)}</dd>
+                      </div>
+                      <div>
+                        <dt>Distance</dt>
+                        <dd>{formatDistance(event)}</dd>
+                      </div>
+                      <div>
+                        <dt>Best view</dt>
+                        <dd>
+                          {event.location?.label ??
+                            (event.globalVisibility
+                              ? "Anywhere with clear night sky"
+                              : "—")}
+                        </dd>
+                      </div>
+                    </dl>
+                    {event.photoTip ? (
+                      <p className="yonder-event-tip">{event.photoTip}</p>
+                    ) : null}
+                    <div className="yonder-event-card-footer">
+                      <button
+                        type="button"
+                        className="yonder-events-linkish"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedId(event.id);
+                          setTab("globe");
+                          setGlobeFocusToken((k) => k + 1);
+                        }}
+                      >
+                        Show on globe
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-        <aside className="flex flex-col gap-3 lg:sticky lg:top-6 lg:self-start">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
-            Your location
-          </h2>
-          <button type="button" onClick={onLocation} className="w-full rounded-lg border border-zinc-800 bg-zinc-950/70 px-4 py-3 text-left text-sm text-zinc-200 hover:border-zinc-600">
-            {place.label} <span className="float-right text-zinc-500">Change location</span>
-          </button>
-          <div className="rounded-md border border-zinc-800 bg-zinc-950/50 p-3 text-xs leading-relaxed text-zinc-500">
-            <p className="font-medium text-zinc-400">How it connects</p>
-            <ul className="mt-2 list-disc space-y-1.5 pl-4">
-              <li>Rarity chips filter the list and the globe together.</li>
-              <li>Click a list card → it stays selected on the globe.</li>
-              <li>Click a globe pin → opens details; jump back to the list.</li>
-            </ul>
-          </div>
-        </aside>
-      </section>
+      {loading && !searchActive ? (
+        <p className="yonder-events-empty" role="status">
+          Loading sky events…
+        </p>
+      ) : null}
+      {!loading && !searching && visible.length === 0 ? (
+        <p className="yonder-events-empty">
+          Nothing in this window — try another rarity or clear search.
+        </p>
+      ) : null}
     </div>
   );
 }

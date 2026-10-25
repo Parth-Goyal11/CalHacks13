@@ -3,23 +3,31 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   createElasticClient,
-  ensureSpaceEventsIndex,
-  SPACE_EVENTS_INDEX,
+  ensureCelestialEventsIndex,
+  deleteLegacySpaceEventsIndex,
+  CELESTIAL_EVENTS_INDEX,
 } from "./elastic.js";
-import { fetchSpaceEvents } from "./fetch-events.js";
+import { fetchCelestialEventsForIndex } from "./fetch-events.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 config({ path: resolve(root, ".env") });
 
 async function main() {
-  const events = await fetchSpaceEvents();
-  console.log(`Fetched ${events.length} space event(s).`);
+  const events = await fetchCelestialEventsForIndex();
+  console.log(`Fetched ${events.length} celestial event(s) (90d, no observer).`);
 
   const client = createElasticClient();
-  await ensureSpaceEventsIndex(client);
+  await deleteLegacySpaceEventsIndex(client);
+  // Recreate so mapping stays in sync (e.g. searchBlob for BM25).
+  await ensureCelestialEventsIndex(client, { recreate: true });
+
+  if (events.length === 0) {
+    console.warn("Nothing to index.");
+    return;
+  }
 
   const operations = events.flatMap((event) => [
-    { index: { _index: SPACE_EVENTS_INDEX, _id: event.id } },
+    { index: { _index: CELESTIAL_EVENTS_INDEX, _id: event.id } },
     event,
   ]);
 
@@ -32,7 +40,9 @@ async function main() {
     return;
   }
 
-  console.log(`Indexed ${events.length} document(s) into ${SPACE_EVENTS_INDEX}.`);
+  console.log(
+    `Indexed ${events.length} document(s) into ${CELESTIAL_EVENTS_INDEX}.`
+  );
 }
 
 main().catch((err) => {

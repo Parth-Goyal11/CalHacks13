@@ -23,6 +23,8 @@
   "dependencies": {
     "@ai-sdk/xai": "^1.2.16",
     "ai": "^4.3.16",
+    "astronomy-engine": "^2.1.19",
+    "satellite.js": "^7.1.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

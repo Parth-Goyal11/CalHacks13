@@ -82,6 +82,7 @@ export type { AlignResult, FigureAlignment } from "./align-figures";
 export {
   getUpcomingCelestialEvents,
   haversineKm,
+  pointsForEvent,
   rankEvents,
   RARITY_POINTS,
   RARITY_RANK,
