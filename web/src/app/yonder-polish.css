@@ -123,6 +123,37 @@ summary:focus-visible {
   color: var(--muted);
   font-size: 12px;
 }
+.feed-people {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 24px;
+}
+.feed-person {
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  min-height: 90px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #e2dfea;
+  font-size: 11px;
+  text-align: center;
+}
+.feed-person img {
+  width: 62px;
+  height: 62px;
+  border: 2px solid #817394;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.feed-person:focus-visible img {
+  outline: 2px solid var(--champagne);
+  outline-offset: 3px;
+}
 .feed-object {
   background: rgb(5 7 13 / 0.84);
 }
