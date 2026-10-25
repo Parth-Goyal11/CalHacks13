@@ -14,12 +14,14 @@ export default function CameraFlow({
   onClose,
   onComplete,
   place,
+  initialNotes = "",
 }: {
   onClose: () => void;
   onComplete: (file: File, result: SkyPhotoResult) => void;
   place?: Place;
+  initialNotes?: string;
 }) {
-  const [draft, setDraft] = useState<CaptureDraft>(() => ({ latitude: place ? String(place.latitude) : "", longitude: place ? String(place.longitude) : "", takenAt: toDatetimeLocalValue(new Date()), facing: "", elevation: "", fov: "", notes: "" }));
+  const [draft, setDraft] = useState<CaptureDraft>(() => ({ latitude: place ? String(place.latitude) : "", longitude: place ? String(place.longitude) : "", takenAt: toDatetimeLocalValue(new Date()), facing: "", elevation: "", fov: "", notes: initialNotes }));
   const [step, setStep] = useState<"live" | "preview" | "loading">("live");
   const [facing, setFacing] = useState<"environment" | "user">("environment");
   const [canFlip, setCanFlip] = useState(false);

@@ -1,6 +1,6 @@
 import type { SkyPhotoResult } from "./analysis";
 
-export type Tab = "home" | "explore" | "memories" | "profile";
+export type Tab = "home" | "explore" | "memories" | "profile" | "events";
 export type IconName =
   | "home"
   | "explore"
@@ -25,6 +25,11 @@ export type CelestialObject = {
   y?: number;
   tone?: "violet" | "red";
   figureId?: string;
+  motif?: string;
+  accent?: string;
+  highlightRank?: number;
+  highlightReason?: string;
+  highlightPoints?: number;
 };
 
 export type SkyPhoto = {

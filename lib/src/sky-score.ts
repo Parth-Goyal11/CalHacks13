@@ -111,6 +111,22 @@ export interface FigureAward {
   points: number;
   breakdown: string[];
   missingCatalogStars: string[];
+  /** True when this figure is one of the scored highlights. */
+  highlighted: boolean;
+  /** 1-based rank among highlights; null when not scored. */
+  rank: number | null;
+}
+
+/** A feature the player is scored on (top 3–5 in the frame). */
+export interface SignificantFeature {
+  rank: number;
+  figureId: string;
+  figureName: string;
+  kind: string;
+  points: number;
+  /** Ranking weight, not the awarded points. */
+  significance: number;
+  reason: string;
 }
 
 export interface ScoreResult {
@@ -128,8 +144,10 @@ export interface ScoreResult {
   capNotes: string[];
   /** Per-constellation / object find points. */
   figureAwards: FigureAward[];
-  /** Sum of figureAwards.points. */
+  /** Sum of highlighted feature points — this is the score that counts. */
   figurePointsTotal: number;
+  /** Top 3–5 features the overlay highlights and the points come from. */
+  highlights: SignificantFeature[];
   /** Rubric ints used for the weighted quality score (0–10). */
   rubric: {
     clarity: number;
@@ -249,6 +267,7 @@ export function scorePhoto(opts: {
       capNotes: [],
       figureAwards: [],
       figurePointsTotal: 0,
+      highlights: [],
       rubric: null,
     };
   }
@@ -306,6 +325,7 @@ export function scorePhoto(opts: {
     capNotes,
     figureAwards: [],
     figurePointsTotal: 0,
+    highlights: [],
     rubric,
   };
 }
@@ -368,7 +388,101 @@ export function awardForFigure(
     points,
     breakdown,
     missingCatalogStars: alignment?.missingCatalogStars ?? [],
+    highlighted: false,
+    rank: null,
   };
+}
+
+const KIND_SIGNIFICANCE: Record<string, number> = {
+  meteor: 30,
+  galaxy: 28,
+  planet: 24,
+  moon: 22,
+  satellite: 20,
+  constellation: 16,
+  asterism: 14,
+  star: 6,
+  other: 4,
+};
+
+function significanceOf(figure: SkyFigure, award: FigureAward): number {
+  const kind = KIND_SIGNIFICANCE[award.kind] ?? 4;
+  const align = (award.alignmentScore ?? 0) * 12;
+  const catalog = Math.min(10, award.catalogMatched * 2);
+  const confidence = Math.max(0, Math.min(1, figure.confidence)) * 14;
+  return kind + award.points * 0.45 + align + catalog + confidence;
+}
+
+function highlightReason(figure: SkyFigure, award: FigureAward): string {
+  const bits: string[] = [];
+  if (award.kind === "constellation" || award.kind === "asterism") {
+    if (award.catalogMatched > 0) {
+      bits.push(
+        `${award.catalogMatched} catalog star${award.catalogMatched === 1 ? "" : "s"} matched`
+      );
+    } else {
+      bits.push(`${award.starsIdentified} stars in the pattern`);
+    }
+  } else if (award.kind === "planet" || award.kind === "moon") {
+    bits.push(`naked-eye ${award.kind}`);
+  } else if (award.kind === "galaxy" || award.kind === "meteor") {
+    bits.push(award.kind);
+  } else {
+    bits.push(award.kind);
+  }
+  if (figure.confidence >= 0.75) bits.push("high confidence");
+  else if (figure.confidence >= 0.5) bits.push("clear in frame");
+  return bits.join(" · ");
+}
+
+/**
+ * Keep the strongest features. With 4+ candidates, return 3, 4, or 5:
+ * the 4th and 5th stay only when they are close to the leader.
+ */
+export function selectSignificantFeatures(
+  figures: SkyFigure[],
+  awards: FigureAward[]
+): SignificantFeature[] {
+  const byId = new Map(awards.map((a) => [a.figureId, a]));
+  const ranked = figures
+    .map((figure) => {
+      const award = byId.get(figure.id);
+      if (!award) return null;
+      return {
+        figure,
+        award,
+        significance: significanceOf(figure, award),
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+    .sort((a, b) => b.significance - a.significance || b.award.points - a.award.points);
+
+  if (ranked.length === 0) return [];
+
+  let count = Math.min(5, ranked.length);
+  if (ranked.length > 3) {
+    count = 3;
+    const leader = ranked[0].significance || 1;
+    for (let i = 3; i < Math.min(5, ranked.length); i++) {
+      if (ranked[i].significance >= leader * 0.55) count = i + 1;
+    }
+  }
+
+  return ranked
+    .slice(0, count)
+    .sort(
+      (a, b) =>
+        b.award.points - a.award.points || b.significance - a.significance
+    )
+    .map((row, index) => ({
+      rank: index + 1,
+      figureId: row.figure.id,
+      figureName: row.figure.name,
+      kind: row.award.kind,
+      points: row.award.points,
+      significance: Math.round(row.significance * 10) / 10,
+      reason: highlightReason(row.figure, row.award),
+    }));
 }
 
 function realFigures(analysis: SkyAnalysis): SkyFigure[] {
@@ -496,12 +610,33 @@ export function scoreSkyAnalysis(
 ): ScoreResult {
   const figs = realFigures(analysis);
   const isNightSky = figs.length > 0;
-  const subjects = inferSubjectsFromAnalysis(analysis, meta);
-  const rubric = rubricFromAnalysis(analysis);
-  const foil =
-    figs.find((f) => f.kind === "constellation" || f.kind === "asterism")
-      ?.name.toLowerCase()
-      .replace(/\s+/g, "-") ?? null;
+  const byId = new Map(
+    (opts?.alignments ?? []).map((a) => [a.figureId, a] as const)
+  );
+  const rawAwards = figs.map((f) => awardForFigure(f, byId.get(f.id)));
+  const highlights = selectSignificantFeatures(figs, rawAwards);
+  const rankById = new Map(highlights.map((h) => [h.figureId, h.rank]));
+  const figureAwards = rawAwards.map((award) => {
+    const rank = rankById.get(award.figureId) ?? null;
+    return { ...award, highlighted: rank != null, rank };
+  });
+  const figurePointsTotal = highlights.reduce((sum, h) => sum + h.points, 0);
+
+  const highlightIds = new Set(highlights.map((h) => h.figureId));
+  const scoredFigures = figs.filter((f) => highlightIds.has(f.id));
+  const subjects = inferSubjectsFromAnalysis(
+    { ...analysis, figures: scoredFigures },
+    meta
+  );
+  const rubric = rubricFromAnalysis(
+    scoredFigures.length > 0
+      ? { ...analysis, figures: scoredFigures }
+      : analysis
+  );
+  const lead =
+    highlights.find((h) => h.kind === "constellation" || h.kind === "asterism") ??
+    highlights[0];
+  const foil = lead ? lead.figureName.toLowerCase().replace(/\s+/g, "-") : null;
 
   const result = scorePhoto({
     isNightSky,
@@ -512,15 +647,13 @@ export function scoreSkyAnalysis(
     cardFoil: foil,
   });
 
-  const byId = new Map(
-    (opts?.alignments ?? []).map((a) => [a.figureId, a] as const)
-  );
-  const figureAwards = figs.map((f) => awardForFigure(f, byId.get(f.id)));
-  const figurePointsTotal = figureAwards.reduce((a, f) => a + f.points, 0);
-
   return {
     ...result,
+    award: result.award
+      ? { ...result.award, points: figurePointsTotal }
+      : null,
     figureAwards,
     figurePointsTotal,
+    highlights,
   };
 }

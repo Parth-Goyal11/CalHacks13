@@ -143,16 +143,75 @@ Return ONLY JSON (no fences):
 }`;
 }
 
-function extractJson(text: string): unknown {
+function parseJsonSlice(slice: string): unknown | null {
+  try {
+    return JSON.parse(slice);
+  } catch {
+    const repaired = slice
+      .replace(/,\s*([}\]])/g, "$1")
+      .replace(/[\u201c\u201d]/g, '"');
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** Pull a JSON object out of prose, fences, or a truncated reply. */
+function extractJson(text: string): unknown | null {
   const trimmed = text.trim();
+  if (!trimmed) return null;
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const raw = fenced ? fenced[1].trim() : trimmed;
+  const raw = (fenced?.[1] ?? trimmed).trim();
   const start = raw.indexOf("{");
   const end = raw.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("Grok did not return JSON. Try again with a clearer sky photo.");
+  if (start < 0 || end <= start) return null;
+  return parseJsonSlice(raw.slice(start, end + 1));
+}
+
+function responseText(result: {
+  text: string;
+  reasoning?: string;
+  response?: { messages?: Array<{ content?: unknown }> };
+}): string {
+  if (result.text.includes("{") && result.text.includes("}")) return result.text;
+  const chunks: string[] = [];
+  if (result.text) chunks.push(result.text);
+  if (result.reasoning) chunks.push(result.reasoning);
+  for (const message of result.response?.messages ?? []) {
+    const content = message.content;
+    if (typeof content === "string") chunks.push(content);
+    else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (
+          part &&
+          typeof part === "object" &&
+          "text" in part &&
+          typeof (part as { text?: unknown }).text === "string"
+        ) {
+          chunks.push((part as { text: string }).text);
+        }
+      }
+    }
   }
-  return JSON.parse(raw.slice(start, end + 1));
+  return chunks.join("\n");
+}
+
+/** When the model explains the frame in prose, keep that reading instead of failing. */
+function proseFallback(text: string): Record<string, unknown> | null {
+  const cleaned = text.replace(/```[\s\S]*?```/g, "").trim();
+  if (cleaned.length < 24) return null;
+  if (/rate limit|unauthorized|api key|invalid api|overloaded|bad gateway|timeout/i.test(cleaned)) {
+    return null;
+  }
+  const sentence = cleaned.split(/(?<=[.!?])\s+/)[0]?.slice(0, 140) || "Sky reading";
+  return {
+    headline: sentence,
+    overview: cleaned.slice(0, 1600),
+    skyConditions: cleaned.slice(0, 280),
+    figures: [],
+  };
 }
 
 async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
@@ -296,32 +355,83 @@ export async function analyzeNightSky(options: {
 
   console.log(`[sky-analysis] ${modelId}…`);
   const started = Date.now();
+  const prompt = buildPrompt(options.meta);
+  const jsonSystem =
+    "Night-sky census. Reply with one JSON object only, no markdown. If the photo is dark, cloudy, noisy, or you are unsure, still return JSON with figures: [] and say why in overview and skyConditions. Never answer with prose only.";
 
-  const result = await withTimeout(
-    generateText({
-      model,
-      maxTokens: 6000,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: buildPrompt(options.meta) },
-            { type: "image", image: base64, mimeType },
-          ],
-        },
-      ],
-    }),
-    ANALYSIS_TIMEOUT_MS,
-    "Sky analysis"
-  );
+  let raw: Record<string, unknown> | null = null;
+  let lastText = "";
+  let lastFinish = "";
+  for (let attempt = 0; attempt < 3 && !raw; attempt++) {
+    if (attempt > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 700 * attempt));
+    }
+    const result = await withTimeout(
+      generateText({
+        model,
+        maxTokens: 6000,
+        temperature: attempt === 0 ? 0.2 : 0,
+        system: attempt === 0 ? jsonSystem : `${jsonSystem} The previous reply was not JSON. Start with {.`,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image", image: base64, mimeType },
+            ],
+          },
+        ],
+      }),
+      ANALYSIS_TIMEOUT_MS,
+      "Sky analysis"
+    );
+    lastFinish = result.finishReason;
+    lastText = responseText(result);
+    const parsed = extractJson(lastText);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      raw = parsed as Record<string, unknown>;
+      break;
+    }
+    console.warn(
+      `[sky-analysis] attempt ${attempt + 1} had no JSON object (finish=${result.finishReason} chars=${lastText.length}) ${JSON.stringify(lastText.slice(0, 220))}`
+    );
+    if (attempt === 2) raw = proseFallback(lastText);
+  }
 
   console.log(`[sky-analysis] done in ${Date.now() - started}ms`);
 
-  const raw = extractJson(result.text) as Record<string, unknown>;
+  if (!raw) {
+    const preview = lastText.replace(/\s+/g, " ").slice(0, 180);
+    throw new Error(
+      preview
+        ? `Sky model reply was not usable (${lastFinish || "unknown"}): ${preview}`
+        : "Sky model sent an empty reply. Hit analyze again in a few seconds."
+    );
+  }
   // Models sometimes omit figures entirely when unsure
   if (!Array.isArray(raw.figures)) raw.figures = [];
-  const parsed = skyAnalysisSchema.parse(raw);
-  const sanitized = sanitize(parsed);
+  if (typeof raw.headline !== "string" || !raw.headline.trim()) {
+    raw.headline = "Sky reading";
+  }
+  if (typeof raw.overview !== "string") {
+    raw.overview =
+      typeof raw.skyConditions === "string" && raw.skyConditions
+        ? raw.skyConditions
+        : "The model did not describe this frame.";
+  }
+  let parsed = skyAnalysisSchema.safeParse(raw);
+  if (!parsed.success) {
+    console.warn(
+      "[sky-analysis] dropping figures that failed schema",
+      parsed.error.issues.slice(0, 3).map((issue) => issue.message).join("; ")
+    );
+    raw.figures = [];
+    parsed = skyAnalysisSchema.safeParse(raw);
+  }
+  if (!parsed.success) {
+    throw new Error("Sky reading could not be read. Hit analyze again.");
+  }
+  const sanitized = sanitize(parsed.data);
   const prediction = buildFovPrediction(options.meta);
   // 1) soft align → 2) catalog geometry verify → 3) FOV cross-check → 4) score
   const { analysis: aligned, alignments } = alignAnalysisToCatalog(sanitized);

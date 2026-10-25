@@ -26,6 +26,7 @@ export default function CaptureDetails({ draft, onChange, error }: { draft: Capt
   return <section className="capture-details" aria-label="Photo location and time">
     <h2>Where was your sky?</h2>
     <p>Confirm the photo’s location and time. For older photos, enter where and when you took them.</p>
+    {draft.notes && <p className="capture-target-note">Looking for <strong>{draft.notes}</strong></p>}
     <button type="button" disabled={locating} onClick={locate}>{locating ? "Finding location…" : "Use current location"}</button>
     {geoError && <p role="alert">{geoError}</p>}
     <div className="capture-fields">

@@ -177,12 +177,12 @@ export default function Discovery({
                 key={object.id}
                 aria-label={`Learn about ${object.name}`}
                 aria-pressed={selected?.id === object.id}
-                className={`sky-marker ${object.tone ?? ""} ${selected?.id === object.id ? "selected" : ""}`}
+                className={`sky-marker ${object.tone ?? ""} ${object.highlightRank ? "is-highlighted" : ""} ${selected?.id === object.id ? "selected" : ""}`}
                 style={{ left: `${object.x}%`, top: `${object.y}%` }}
                 onClick={() => selectObject(object)}
               >
-                <span className="marker-ring" />
-                <span className="marker-dot" />
+                <span className="marker-ring" style={object.accent ? { borderColor: object.accent } : undefined} />
+                <span className="marker-dot" style={object.accent ? { background: object.accent, boxShadow: `0 0 8px ${object.accent}` } : undefined} />
                 <span className="marker-label">{object.name}</span>
               </button>
             ))}
@@ -276,6 +276,10 @@ export default function Discovery({
               <p>{result.reveal.fovCheck.summary}</p>
               <p>Catalog checks compare model detections with star patterns; this is not an Astrometry plate solve.</p>
               <p>{result.reveal.score.figurePointsTotal} identification points. {result.reveal.score.capNotes.join(" ")}</p>
+              {(result.reveal.score.highlights ?? []).length > 0 && <div className="analysis-highlights" aria-label="Ben's scored sky highlights">
+                <h3>Scored highlights</h3>
+                {(result.reveal.score.highlights ?? []).map((feature) => <p key={feature.figureId}><strong>#{feature.rank} {feature.figureName}</strong> · +{feature.points} pts — {feature.reason}</p>)}
+              </div>}
             </>}
             {result?.critique?.strengths?.map((text, index) => (
               <p key={`strength-${index}`}>{text}</p>
@@ -300,7 +304,8 @@ export default function Discovery({
           <span className="sheet-handle" />
           <div className="sheet-heading">
             <div>
-              <p>{selected.kind}</p>
+              <p>{selected.kind}{selected.motif ? ` · ${selected.motif}` : ""}</p>
+              {selected.highlightRank && <span className="selected-highlight">#{selected.highlightRank} scored highlight · +{selected.highlightPoints ?? 0} pts</span>}
               <h2>{selected.name}</h2>
             </div>
             <button
@@ -314,6 +319,7 @@ export default function Discovery({
             </button>
           </div>
           <p className="object-detail">{selected.detail}</p>
+          {selected.highlightReason && <p className="highlight-reason">{selected.highlightReason}</p>}
           {result?.reveal && selected.figureId && <ObjectExplanation key={selected.id} reveal={result.reveal} figureId={selected.figureId} />}
           <div className="sheet-footer">
             <span>

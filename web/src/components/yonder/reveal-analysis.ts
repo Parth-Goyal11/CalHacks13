@@ -1,4 +1,4 @@
-import type { SkyAnalysisWithScore, SkyCaptureMeta } from "@calhacks13/lib";
+import { figureIdentity, type SkyAnalysisWithScore, type SkyCaptureMeta } from "@calhacks13/lib";
 import { dataUrlToBase64, fileToResizedDataUrl } from "@/lib/image";
 import type { SkyPhotoResult } from "./photo-types";
 import type { CelestialObject } from "./sky-data";
@@ -12,14 +12,22 @@ export function revealFigures(reveal: SkyRevealResult) {
 /** Present Ben's data as Figma's original rings and object sheets. */
 export function revealObjects(reveal: SkyRevealResult): CelestialObject[] {
   const figures = revealFigures(reveal);
+  const highlights = reveal.score.highlights ?? [];
   const objects: CelestialObject[] = figures.map((figure) => {
     const points = reveal.verification.acceptedStars.filter((star) => star.figureId === figure.id && Number.isFinite(star.x) && Number.isFinite(star.y) && star.x >= 0 && star.x <= 1 && star.y >= 0 && star.y <= 1);
+    const identity = figureIdentity(figure.name, figure.kind);
+    const highlight = highlights.find((feature) => feature.figureId === figure.id);
     return {
       id: `figure-${figure.id}`,
       figureId: figure.id,
       name: figure.name,
       kind: figure.kind,
       detail: [figure.summary, figure.description, figure.mythology].filter(Boolean).join("\n\n"),
+      motif: identity.motif,
+      accent: identity.accent,
+      highlightRank: highlight?.rank,
+      highlightReason: highlight?.reason,
+      highlightPoints: highlight?.points,
       x: points.length ? points.reduce((sum, point) => sum + point.x, 0) / points.length * 100 : undefined,
       y: points.length ? points.reduce((sum, point) => sum + point.y, 0) / points.length * 100 : undefined,
     };

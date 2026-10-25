@@ -2,7 +2,9 @@
 
 ## Current camera integration: Ben's sky reveal
 
-Yonder's camera now uses Ben (`beng0ng`)'s `sky-image-proc` implementation at commit `5245844`. His analysis prompts, catalogs, geometry verification, location/FOV prediction and scoring are copied intact. The current Figma Make design is the visual source of truth: full-screen photograph, subtle object rings, bookmark and translucent object detail sheet. Ben's detections and explanations populate those existing elements; scores, rubric, catalog and FOV summaries are tucked into Photo details. His separate dashboard-style result components are not used. Ask Grok for more remains available inside the object sheet.
+Yonder's camera uses Ben (`beng0ng`)'s latest `sky-image-proc` implementation at commit `49415c3`, preserving his analysis prompt, expanded star catalog, geometry verification, location/FOV prediction, significant-feature ranking, coded scoring and response-recovery behavior. The current Figma Make design remains the visual source of truth: full-screen photograph, subtle object rings, bookmark and translucent object detail sheet. Ben's detections and explanations populate those elements; constellation motif/color, scored highlights, rubric, catalog and FOV summaries appear in the existing result detail UI. His separate dashboard-style capture/result flow is not used. Ask Grok for more remains available inside the object sheet.
+
+Ben's upcoming celestial-events board is also available at `/events`, linked from Explore. It keeps the rarity-filtered event list and interactive globe, uses the same selected location as Yonder, and opens Yonder's camera from its capture actions. The five-action Figma navigation stays in place; Events is an Explore destination rather than a replacement tab.
 
 - Flow: camera/gallery → photo review with location and capture time → Yonder's minimal loading screen → Ben's reveal → Save memory. The full original response and capture metadata are retained in IndexedDB. Existing Python-pipeline Memories still open with their original result view.
 - API: `POST /api/analyze-sky` accepts Ben's `{ imageBase64, mimeType, meta }` JSON contract and returns `{ analysis, score, verification, prediction, fovCheck }`. The client uses Ben's unchanged 1280px JPEG conversion, keeps the original photo locally and adds a 105-second timeout plus stale-response/cancel guards. Cancel preserves the photo and metadata; it does not guarantee cancellation of a provider call already in progress.
@@ -27,7 +29,8 @@ Design source: https://www.figma.com/make/lK1XPXSmzeAS9AsI4RDzyu/Design-Your-Sky
 
 ## What is connected
 
-- Home, Explore, camera, Memories and Profile use the imported Figma visual language, celestial icons and original photographs.
+- Home, Explore, camera, Memories, Profile and the Events destination use the imported Figma visual language, celestial icons and original photographs.
+- Events combines the upcoming celestial-event catalog with location-aware distance/rarity sorting and a linked globe/list selection view. Event discovery is an observing guide, not a prediction that a specific event will be visible through clouds or local obstructions.
 - The center camera button opens a real camera dialog, with shutter, rear/front selection when available, gallery picker, native phone-camera fallback, permission errors and cleanup when hidden or closed.
 - A captured or selected photo opens an uncropped review. The former analysis adapter sends multipart `image` to the existing Next.js proxy and FastAPI pipeline; the current camera uses Ben's JSON endpoint above.
 - The minimal loading screen stays visible for the real request. Cancel returns to review and retains the photo. There are no simulated percentages or artificial processing delays.

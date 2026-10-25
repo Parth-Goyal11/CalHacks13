@@ -3,6 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- Figma photographs and local Blob URLs share fixed photo slots. */
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -30,6 +31,7 @@ import {
   useSkyWeather,
 } from "./SkyLocation";
 import type { Place, CurrentWeather } from "./tonight-data";
+import { EventsBoard } from "@/components/events/EventsBoard";
 
 type LocalProfile = {
   name: string;
@@ -55,6 +57,7 @@ function subscribeNavigation(callback: () => void) {
   };
 }
 function tabSnapshot(): Tab {
+  if (window.location.pathname === "/events") return "events";
   const value = new URLSearchParams(window.location.search).get("tab");
   return value === "explore" || value === "memories" || value === "profile"
     ? value
@@ -92,6 +95,7 @@ export default function YonderApp({
   );
   const [activePhoto, setActivePhoto] = useState<SkyPhoto | null>(null);
   const [cameraOpen, setCameraOpen] = useState(initialCapture);
+  const [captureTarget, setCaptureTarget] = useState("");
   const [savedPhotos, setSavedPhotos] = useState<SkyPhoto[]>([]);
   const [latestPhoto, setLatestPhoto] = useState<SkyPhoto | null>(null);
   const [profile, setProfile] = useState(defaultProfile);
@@ -151,6 +155,7 @@ export default function YonderApp({
     void hydrate();
     function onBack() {
       setCameraOpen(false);
+      setCaptureTarget("");
       setActivePhoto(null);
       setSheet(null);
     }
@@ -173,12 +178,14 @@ export default function YonderApp({
     pushOverlay();
     setActivePhoto(photo);
   }
-  function openCamera() {
+  function openCamera(target?: string) {
     pushOverlay();
+    setCaptureTarget(target ?? "");
     setCameraOpen(true);
   }
   function closeOverlay() {
     setCameraOpen(false);
+    setCaptureTarget("");
     setActivePhoto(null);
     if (window.history.state?.yonderOverlay) window.history.back();
   }
@@ -264,6 +271,15 @@ export default function YonderApp({
 
   const personalSky =
     latestPhoto ?? savedPhotos.find((photo) => photo.result) ?? null;
+  const eventsPlace = useMemo(
+    () => ({
+      id: String(sky.place.id),
+      label: `${sky.place.name}${sky.place.region ? `, ${sky.place.region}` : ""}`,
+      latitude: sky.place.latitude,
+      longitude: sky.place.longitude,
+    }),
+    [sky.place.id, sky.place.name, sky.place.region, sky.place.latitude, sky.place.longitude],
+  );
   return (
     <main className="app-stage">
       <div className="app-frame">
@@ -315,15 +331,25 @@ export default function YonderApp({
                 place={sky.chosen ? sky.place.name : "Choose your location"}
               />
             )}
+            {activeTab === "events" && (
+              <section className="screen scroll-screen explore-screen events-screen" aria-labelledby="events-screen-title">
+                <button type="button" className="events-back" onClick={() => navigate("explore")}>← Back to Explore</button>
+                <EventsBoard
+                  place={eventsPlace}
+                  onLocation={() => setSheet("location")}
+                  onCapture={openCamera}
+                />
+              </section>
+            )}
           </div>
           <BottomNav
-            active={activeTab}
+            active={activeTab === "events" ? "explore" : activeTab}
             onChange={navigate}
             onCapture={openCamera}
           />
         </div>
         {cameraOpen && (
-          <CameraFlow place={sky.chosen ? sky.place : undefined} onClose={closeOverlay} onComplete={completed} />
+          <CameraFlow place={sky.chosen ? sky.place : undefined} initialNotes={captureTarget} onClose={closeOverlay} onComplete={completed} />
         )}
         {activePhoto && (
           <Discovery
@@ -672,6 +698,11 @@ function ExploreScreen({
           <span role="status">Checking the sky…</span>
         )}
       </div>
+      <a className="events-entry" href="/events">
+        <span className="events-entry-mark"><SkyIcon name="spark" size={17} /></span>
+        <span><strong>Upcoming sky events</strong><small>Find what’s worth catching next</small></span>
+        <SkyIcon name="arrow" size={17} />
+      </a>
       <button
         className="feature-story"
         type="button"
