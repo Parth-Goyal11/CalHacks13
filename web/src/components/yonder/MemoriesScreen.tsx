@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- Memories display original photos from local Blob storage. */
 import { useState } from "react";
-import { COLLECTION_TIERS, qualityTracks, TIER_PERKS, type StoredCreature } from "./collection";
+import { COLLECTION_TIERS, collectionPower, creatureGift, nextEvolution, qualityTracks, TIER_PERKS, type StoredCreature } from "./collection";
 import ConstellationMap from "./ConstellationMap";
 import CreaturePortrait from "./CreaturePortrait";
 import { demoSkies, type SkyPhoto } from "./sky-data";
@@ -30,6 +30,9 @@ export default function MemoriesScreen({
       ? openCreature.tracks
       : qualityTracks(openCreature)
     : [];
+  const power = collectionPower(creatures);
+  const evolve = nextEvolution(creatures);
+  const openGift = openCreature ? creatureGift(openCreature) : null;
   return (
     <section
       className="screen scroll-screen my-sky"
@@ -51,7 +54,13 @@ export default function MemoriesScreen({
           <div className="memory-intro">
             <p>
               {creatures.length
-                ? `${creatures.length} ${creatures.length === 1 ? "creature" : "creatures"}, each beside its star map.`
+                ? `${power} power · ${
+                    evolve
+                      ? evolve.gift.gap === 0
+                        ? `photograph ${evolve.creature.name} again`
+                        : `${evolve.creature.name} needs ${evolve.gift.gap} pts`
+                      : "every creature is Myth"
+                  }`
                 : "Catch a constellation and its creature forms here."}
             </p>
             <button type="button" onClick={() => setPerksOpen((open) => !open)}>
@@ -63,7 +72,7 @@ export default function MemoriesScreen({
               {[...COLLECTION_TIERS].reverse().map((tier) => (
                 <li key={tier} className={`tier-${tier.toLowerCase()}`}>
                   <strong>
-                    {tier} · {TIER_PERKS[tier].perk}
+                    {tier} · {TIER_PERKS[tier].perk} · +{creatureGift({ name: tier, tier, points: 0 }).score}
                   </strong>
                   <span>{TIER_PERKS[tier].detail}</span>
                 </li>
@@ -74,6 +83,7 @@ export default function MemoriesScreen({
             <ul className="memory-rail">
               {creatures.map((creature) => {
                 const open = openId === creature.id;
+                const gift = creatureGift(creature);
                 return (
                   <li key={creature.id} className={`memory-card tier-${creature.tier.toLowerCase()}`}>
                     <button
@@ -90,9 +100,17 @@ export default function MemoriesScreen({
                       <CreaturePortrait creature={creature} />
                       <span className="memory-copy">
                         <b>{creature.name}</b>
-                        <small>
-                          Tier {creature.tier} · {creature.perk}
-                        </small>
+                        <small>{gift.epithet}</small>
+                        <span className="creature-boost">
+                          +{gift.score} {gift.boost}
+                        </span>
+                        <span className="evolve-note">
+                          {gift.gap == null
+                            ? "Myth tier"
+                            : gift.gap === 0
+                              ? `Photograph again for ${gift.nextTier}`
+                              : `${gift.gap} pts to ${gift.nextTier}`}
+                        </span>
                       </span>
                     </button>
                   </li>
@@ -105,6 +123,7 @@ export default function MemoriesScreen({
               <p>
                 {openCreature.name} · Tier {openCreature.tier}
               </p>
+              {openGift ? <p className="evolve-note">{openGift.quest}</p> : null}
               <ul className="quality-tracks">
                 {openTracks.map((track) => (
                   <li key={track.key}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { qualityTracks, type StoredCreature } from "./collection";
+import { creatureGift, qualityTracks, type StoredCreature } from "./collection";
 import ConstellationMap from "./ConstellationMap";
 import CreaturePortrait from "./CreaturePortrait";
 
@@ -23,6 +23,7 @@ export default function CreatureCatch({
   creatureRef.current = creature;
   onFormedRef.current = onFormed;
   const tracks = creature.tracks?.length ? creature.tracks : qualityTracks(creature);
+  const gift = creatureGift(creature);
 
   useEffect(() => {
     if (settle) {
@@ -72,7 +73,11 @@ export default function CreatureCatch({
           {creature.name} · Tier {creature.tier}
         </p>
         <CreaturePortrait creature={creature} />
-        <p className="catch-added">{progress >= 1 ? "In your collection" : "Forming with the stars"}</p>
+        <p className="catch-added">
+          {progress >= 1
+            ? `${gift.epithet} · +${gift.score} ${gift.boost}`
+            : "Forming with the stars"}
+        </p>
         {progress >= 1 ? (
           <ul className="quality-tracks">
             {tracks.map((track) => (
