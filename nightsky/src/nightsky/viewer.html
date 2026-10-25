@@ -99,20 +99,15 @@
       border-radius: 12px;
       overflow: hidden;
     }
-    .viewport video, .viewport canvas, #backdrop {
+    .viewport video, .viewport canvas {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
     }
     .viewport video { object-fit: cover; background: transparent; }
-    #backdrop {
-      object-fit: fill;
-      border-radius: 0;
-      z-index: 0;
-      display: none;
-    }
-    #backdrop.on { display: block; }
+    #skyphoto { z-index: 0; display: none; }
+    #skyphoto.on { display: block; }
     #chart { z-index: 1; }
     .aim { display: grid; gap: 8px; margin-top: 12px; }
     .aim label { font-size: 14px; }
@@ -141,7 +136,7 @@
       <div id="live">
         <div id="viewport" class="viewport">
           <video id="camera" playsinline autoplay muted></video>
-          <img id="backdrop" alt="All-sky photograph of this view">
+          <canvas id="skyphoto" aria-label="All-sky photograph of this view"></canvas>
           <canvas id="chart"></canvas>
         </div>
         <p id="sky-status" class="note"></p>
@@ -225,12 +220,12 @@
     const fovInput = document.querySelector("#fov");
     const canvas = document.querySelector("#chart");
     const video = document.querySelector("#camera");
-    const backdrop = document.querySelector("#backdrop");
+    const skyPhoto = document.querySelector("#skyphoto");
     const skyStatus = document.querySelector("#sky-status");
-    let backdropToken = 0;
-    let backdropTimer = null;
-    let backdropAim = null;
-    let backdropPending = null;
+    let sidereal = null;
+    let skyReady = false;
+    let skyGl = null;
+    let skyUniforms = null;
 
     function setStatus(text, isError) {
       status.textContent = text || "";
@@ -461,14 +456,14 @@
       const aim = aimNow();
       const context = canvas.getContext("2d");
       context.clearRect(0, 0, canvas.width, canvas.height);
-      if (!cameraOn && !backdrop.classList.contains("on")) {
+      if (!cameraOn && !skyReady) {
         const wash = context.createRadialGradient(canvas.width / 2, canvas.height, 20, canvas.width / 2, canvas.height, canvas.height);
         wash.addColorStop(0, "rgba(18, 32, 58, 0.55)");
         wash.addColorStop(1, "rgba(5, 7, 12, 0)");
         context.fillStyle = wash;
         context.fillRect(0, 0, canvas.width, canvas.height);
       }
-      queueBackdrop(aim);
+      drawSky(aim);
       context.strokeStyle = "rgba(226, 177, 90, 0.45)";
       context.lineWidth = 1;
       context.beginPath();
@@ -526,7 +521,8 @@
         const polarisLine = polaris
           ? `Polaris is ${fmt(polaris.alt_deg, 1)}° up and ${fmt(polaris.az_deg, 1)}° from true north.`
           : "Polaris is the north mark.";
-        skyStatus.textContent = `${polarisLine} ${visible.length} catalog objects are inside this lens.${correction}${sensorNote}`;
+        const loading = skyReady || cameraOn ? "" : " The sky photograph is loading.";
+        skyStatus.textContent = `${polarisLine} ${visible.length} catalog objects are inside this lens.${correction}${sensorNote}${loading}`;
       }
       const now = performance.now();
       if (document.querySelector("#tab-sky").classList.contains("active") && now - listedAt > 400) {
@@ -553,85 +549,104 @@
       }
     }
 
-    function backdropSize(aim) {
-      const cap = 720;
-      const scale = Math.min(1, cap / Math.max(aim.width, aim.height, 1));
-      return {
-        width: Math.max(64, Math.round(aim.width * scale)),
-        height: Math.max(64, Math.round(aim.height * scale))
-      };
-    }
-
-    function backdropMoved(previous, aim, size, place) {
-      if (!previous) return true;
-      const turn = Math.abs((((aim.azimuth - previous.azimuth) + 540) % 360) - 180);
-      return turn > 1.2
-        || Math.abs(aim.altitude - previous.altitude) > 1.2
-        || Math.abs(aim.roll - previous.roll) > 2
-        || Math.abs(aim.fov - previous.fov) > 1.5
-        || size.width !== previous.width
-        || size.height !== previous.height
-        || place.latitude !== previous.latitude
-        || place.longitude !== previous.longitude
-        || place.taken_at !== previous.taken_at;
-    }
-
-    function queueBackdrop(aim) {
-      if (cameraOn) {
-        backdrop.classList.remove("on");
+    function drawSky(aim) {
+      if (cameraOn || !skyReady || sidereal == null) {
+        skyPhoto.classList.remove("on");
         return;
       }
-      if (!document.querySelector("#tab-sky").classList.contains("active")) return;
-      if (aim.width < 64 || aim.height < 64) return;
       const place = placeTime();
       if (!place) return;
-      const size = backdropSize(aim);
-      if (!backdropMoved(backdropPending || backdropAim, aim, size, place)) return;
-      const next = {
-        azimuth: aim.azimuth,
-        altitude: aim.altitude,
-        roll: aim.roll,
-        fov: aim.fov,
-        width: size.width,
-        height: size.height,
-        latitude: place.latitude,
-        longitude: place.longitude,
-        taken_at: place.taken_at
-      };
-      backdropPending = next;
-      clearTimeout(backdropTimer);
-      backdropTimer = setTimeout(() => loadBackdrop(next), 450);
+      const box = document.querySelector("#viewport");
+      const width = Math.max(2, box.clientWidth);
+      const height = Math.max(2, box.clientHeight);
+      if (skyPhoto.width !== width || skyPhoto.height !== height) {
+        skyPhoto.width = width;
+        skyPhoto.height = height;
+        skyGl.viewport(0, 0, width, height);
+      }
+      const [right, up, forward] = basis(aim);
+      const gl = skyGl;
+      gl.useProgram(skyUniforms.program);
+      gl.uniform3fv(skyUniforms.right, right);
+      gl.uniform3fv(skyUniforms.up, up);
+      gl.uniform3fv(skyUniforms.forward, forward);
+      gl.uniform1f(skyUniforms.focal, (width / 2) / Math.tan(aim.fov * Math.PI / 360));
+      gl.uniform2f(skyUniforms.center, (width - 1) / 2, (height - 1) / 2);
+      gl.uniform1f(skyUniforms.sidereal, sidereal);
+      gl.uniform1f(skyUniforms.sinLat, Math.sin(place.latitude * Math.PI / 180));
+      gl.uniform1f(skyUniforms.cosLat, Math.cos(place.latitude * Math.PI / 180));
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      skyPhoto.classList.add("on");
     }
 
-    function loadBackdrop(next) {
-      if (cameraOn || backdropPending !== next) return;
-      const token = ++backdropToken;
-      const params = new URLSearchParams({
-        latitude: String(next.latitude),
-        longitude: String(next.longitude),
-        taken_at: next.taken_at,
-        azimuth: String(next.azimuth),
-        altitude: String(next.altitude),
-        roll: String(next.roll),
-        fov: String(next.fov),
-        width: String(next.width),
-        height: String(next.height)
-      });
+    function startSkyPhoto() {
+      const gl = skyPhoto.getContext("webgl", { antialias: false, preserveDrawingBuffer: true });
+      if (!gl) return;
+      const vertex = gl.createShader(gl.VERTEX_SHADER);
+      gl.shaderSource(vertex, `
+        attribute vec2 aCorner;
+        void main() { gl_Position = vec4(aCorner, 0.0, 1.0); }
+      `);
+      gl.compileShader(vertex);
+      const fragment = gl.createShader(gl.FRAGMENT_SHADER);
+      gl.shaderSource(fragment, `
+        precision mediump float;
+        uniform sampler2D uSky;
+        uniform vec3 uRight, uUp, uForward;
+        uniform float uFocal, uSidereal, uSinLat, uCosLat;
+        uniform vec2 uCenter;
+        void main() {
+          vec2 pixel = gl_FragCoord.xy - uCenter;
+          vec3 direction = normalize(pixel.x / uFocal * uRight + pixel.y / uFocal * uUp + uForward);
+          float east = direction.x;
+          float north = direction.y;
+          float zenith = direction.z;
+          float sinDec = clamp(zenith * uSinLat + north * uCosLat, -1.0, 1.0);
+          float declination = asin(sinDec);
+          float cosine = max(cos(declination), 0.0001);
+          float hour = atan(-east / cosine, (uCosLat * zenith - uSinLat * north) / cosine);
+          float ra = mod(uSidereal - degrees(hour), 360.0);
+          gl_FragColor = texture2D(uSky, vec2(0.5 - ra / 360.0, 0.5 - degrees(declination) / 180.0));
+        }
+      `);
+      gl.compileShader(fragment);
+      const program = gl.createProgram();
+      gl.attachShader(program, vertex);
+      gl.attachShader(program, fragment);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+      const corners = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, corners);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      const corner = gl.getAttribLocation(program, "aCorner");
+      gl.enableVertexAttribArray(corner);
+      gl.vertexAttribPointer(corner, 2, gl.FLOAT, false, 0, 0);
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      skyGl = gl;
+      skyUniforms = {
+        program,
+        right: gl.getUniformLocation(program, "uRight"),
+        up: gl.getUniformLocation(program, "uUp"),
+        forward: gl.getUniformLocation(program, "uForward"),
+        focal: gl.getUniformLocation(program, "uFocal"),
+        center: gl.getUniformLocation(program, "uCenter"),
+        sidereal: gl.getUniformLocation(program, "uSidereal"),
+        sinLat: gl.getUniformLocation(program, "uSinLat"),
+        cosLat: gl.getUniformLocation(program, "uCosLat")
+      };
       const image = new Image();
       image.onload = () => {
-        if (token !== backdropToken || cameraOn) return;
-        backdropAim = next;
-        if (backdropPending === next) backdropPending = null;
-        backdrop.src = image.src;
-        backdrop.classList.add("on");
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        skyReady = true;
       };
-      image.onerror = () => {
-        if (token !== backdropToken) return;
-        backdropAim = next;
-        if (backdropPending === next) backdropPending = null;
-        backdrop.classList.remove("on");
-      };
-      image.src = `/api/backdrop?${params}`;
+      image.src = "/api/panorama";
     }
 
     async function refreshSky() {
@@ -656,6 +671,7 @@
         }
         skyError = "";
         chart = data;
+        sidereal = data.sidereal_deg;
         if (!userAimed && data.polaris) {
           applying = true;
           headingInput.value = String(data.polaris.az_deg);
@@ -724,8 +740,6 @@
         for (const track of (video.srcObject ? video.srcObject.getTracks() : [])) track.stop();
         video.srcObject = null;
         cameraOn = false;
-        backdropAim = null;
-        backdropPending = null;
         document.querySelector("#open-camera").classList.remove("primary");
         document.querySelector("#open-camera").textContent = "Show the sky behind the names";
         drawChart();
@@ -738,7 +752,7 @@
       try {
         video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         cameraOn = true;
-        backdrop.classList.remove("on");
+        skyPhoto.classList.remove("on");
         document.querySelector("#open-camera").classList.add("primary");
         document.querySelector("#open-camera").textContent = "Hide the camera";
         video.onloadedmetadata = () => {
@@ -831,6 +845,7 @@
       catalog.textContent = "The catalog has not loaded yet.";
     });
     bootPlace();
+    startSkyPhoto();
     requestAnimationFrame(tick);
   </script>
 </body>

@@ -572,6 +572,39 @@ def test_scans_of_online_star_fields_name_the_known_stars(db, tmp_path):
 
 
 
+def test_screen_center_is_the_aimed_direction():
+    from nightsky.backdrop import pixel_radec
+    from nightsky.horizon import Aim
+    from nightsky.skyview import _altaz_to_equatorial
+
+    when = datetime(2026, 10, 25, 5, 0, tzinfo=timezone.utc)
+    aim = Aim(140, 42, 12, 60, 500, 700)
+    ra, dec = pixel_radec(249.5, 349.5, aim, 37.77, -122.42, when)
+    expected_ra, expected_dec = _altaz_to_equatorial(42, 140, 37.77, -122.42, when)
+    assert abs(((ra - expected_ra + 180) % 360) - 180) < 0.05
+    assert abs(dec - expected_dec) < 0.05
+
+
+def test_telescope_grade_saturates_a_pale_sky():
+    from nightsky.backdrop import grade_telescope
+
+    pale = Image.new("RGB", (48, 48))
+    for y in range(48):
+        for x in range(48):
+            pale.putpixel((x, y), (70 + x, 80, 110))
+    for y in range(16, 32):
+        for x in range(16, 32):
+            pale.putpixel((x, y), (150, 70, 90))
+    graded = np.asarray(grade_telescope(pale)).astype(float)
+    original = np.asarray(pale).astype(float)
+
+    def chroma(pixels):
+        spread = pixels.max(axis=2) - pixels.min(axis=2)
+        return float(spread.mean())
+
+    assert chroma(graded) > chroma(original) * 1.5
+
+
 def test_survey_roll_turns_celestial_north():
     from nightsky.backdrop import survey_rotation_deg
     from nightsky.horizon import Aim

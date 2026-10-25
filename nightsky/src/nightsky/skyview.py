@@ -49,9 +49,17 @@ def sky_chart(conn: psycopg.Connection, latitude: float, longitude: float, when:
         "longitude": longitude,
         "taken_at": moment,
         "declination_deg": declination_deg(latitude, longitude, moment),
+        "sidereal_deg": local_sidereal_deg(longitude, moment),
         "polaris": polaris,
         "objects": objects,
     }
+
+
+def local_sidereal_deg(longitude: float, when: datetime) -> float:
+    """Local sidereal time in degrees, matching the star altitude and azimuth."""
+    moment = when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+    timescale = Loader(str(SKYFIELD)).timescale()
+    return (timescale.from_datetime(moment.astimezone(timezone.utc)).gast * 15.0 + longitude) % 360.0
 
 
 def direction_radec(latitude: float, longitude: float, when: datetime, azimuth_deg: float, altitude_deg: float):
@@ -109,8 +117,7 @@ def _star_altaz(conn, latitude: float, longitude: float, when: datetime) -> list
 
 
 def _equatorial_to_altaz(ra_deg: np.ndarray, dec_deg: np.ndarray, latitude: float, longitude: float, when: datetime):
-    timescale = Loader(str(SKYFIELD)).timescale()
-    sidereal = (timescale.from_datetime(when).gast * 15.0 + longitude) % 360.0
+    sidereal = local_sidereal_deg(longitude, when)
     hour = np.radians((sidereal - ra_deg + 180.0) % 360.0 - 180.0)
     dec = np.radians(dec_deg)
     phi = math.radians(latitude)
@@ -125,8 +132,7 @@ def _equatorial_to_altaz(ra_deg: np.ndarray, dec_deg: np.ndarray, latitude: floa
 
 def _altaz_to_equatorial(altitude_deg: float, azimuth_deg: float, latitude: float, longitude: float, when: datetime):
     """Inverse of _equatorial_to_altaz for one direction."""
-    timescale = Loader(str(SKYFIELD)).timescale()
-    sidereal = (timescale.from_datetime(when).gast * 15.0 + longitude) % 360.0
+    sidereal = local_sidereal_deg(longitude, when)
     altitude = math.radians(altitude_deg)
     azimuth = math.radians(azimuth_deg)
     phi = math.radians(latitude)

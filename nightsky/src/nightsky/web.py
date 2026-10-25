@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import tempfile
+import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from nightsky.backdrop import survey_jpeg
+from nightsky.backdrop import panorama_jpeg, survey_jpeg
 from nightsky.db import connect
 from nightsky.horizon import Aim
 from nightsky.paths import OUTPUT
@@ -23,9 +24,17 @@ PAGE = Path(__file__).with_name("viewer.html")
 
 
 def serve(host: str = HOST, port: int = PORT) -> None:
+    threading.Thread(target=_warm_panorama, daemon=True).start()
     server = ThreadingHTTPServer((host, port), ViewerHandler)
     print(f"Night sky viewer at http://127.0.0.1:{port}")
     server.serve_forever()
+
+
+def _warm_panorama() -> None:
+    try:
+        panorama_jpeg()
+    except Exception:
+        return
 
 
 class ViewerHandler(BaseHTTPRequestHandler):
@@ -39,6 +48,9 @@ class ViewerHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/backdrop":
             self._backdrop()
+            return
+        if path == "/api/panorama":
+            self._panorama()
             return
         if path.startswith("/files/"):
             self._send_file(unquote(path[len("/files/") :]))
@@ -132,6 +144,14 @@ class ViewerHandler(BaseHTTPRequestHandler):
                 taken_at,
                 Aim(azimuth % 360.0, altitude, roll, fov, width, height),
             )
+        except Exception:
+            self._send(502, b"The telescope photograph is unavailable.", "text/plain; charset=utf-8")
+            return
+        self._send(200, jpeg, "image/jpeg")
+
+    def _panorama(self) -> None:
+        try:
+            jpeg = panorama_jpeg()
         except Exception:
             self._send(502, b"The telescope photograph is unavailable.", "text/plain; charset=utf-8")
             return
