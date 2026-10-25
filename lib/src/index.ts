@@ -15,3 +15,19 @@ export type {
   SkyLine,
   SkyStar,
 } from "./sky-analysis";
+
+export {
+  getUpcomingCelestialEvents,
+  haversineKm,
+  rankEvents,
+  RARITY_POINTS,
+  RARITY_RANK,
+} from "./celestial-events";
+export type {
+  CelestialEvent,
+  CelestialEventKind,
+  EventRarity,
+  EventSortMode,
+  ObserverLocation,
+  RankedCelestialEvent,
+} from "./celestial-events";

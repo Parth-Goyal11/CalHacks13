@@ -8,10 +8,15 @@ import {
   localInputToIso,
   toDatetimeLocalValue,
 } from "@/lib/image";
+import { DropZone } from "./DropZone";
 import { FigurePanel } from "./FigurePanel";
+import { LocationSearch, type GeocodedPlace } from "./LocationSearch";
 import { SkyOverlay } from "./SkyOverlay";
 
 type Step = "capture" | "meta" | "result";
+
+const fieldClass =
+  "rounded-md border border-zinc-800 bg-zinc-900/80 px-3 py-2 text-zinc-100 outline-none transition placeholder:text-zinc-600 focus:border-sky-600";
 
 export function SkyExplorer() {
   const [step, setStep] = useState<Step>("capture");
@@ -23,14 +28,12 @@ export function SkyExplorer() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [pendingSeconds, setPendingSeconds] = useState(0);
+  const [ingestBusy, setIngestBusy] = useState(false);
 
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
-  const [locationLabel, setLocationLabel] = useState("");
+  const [place, setPlace] = useState<GeocodedPlace | null>(null);
   const [takenAt, setTakenAt] = useState("");
   const [facingDegrees, setFacingDegrees] = useState("");
   const [notes, setNotes] = useState("");
-  const [geoBusy, setGeoBusy] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -44,15 +47,27 @@ export function SkyExplorer() {
   }, []);
 
   async function ingestFile(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("Please drop or choose an image file.");
+      return;
+    }
     setError(null);
-    const resized = await fileToResizedDataUrl(file);
-    setDataUrl(resized.dataUrl);
-    setMimeType(resized.mimeType);
-    setPreviewUrl(resized.dataUrl);
-    setAnalysis(null);
-    setSelected(null);
-    setTakenAt(toDatetimeLocalValue(new Date()));
-    setStep("meta");
+    setIngestBusy(true);
+    try {
+      const resized = await fileToResizedDataUrl(file);
+      setDataUrl(resized.dataUrl);
+      setMimeType(resized.mimeType);
+      setPreviewUrl(resized.dataUrl);
+      setAnalysis(null);
+      setSelected(null);
+      setTakenAt(toDatetimeLocalValue(new Date()));
+      stopCamera();
+      setStep("meta");
+    } catch {
+      setError("Could not read that image. Try another file.");
+    } finally {
+      setIngestBusy(false);
+    }
   }
 
   async function startCamera() {
@@ -71,7 +86,7 @@ export function SkyExplorer() {
         }
       });
     } catch {
-      setError("Camera access denied. You can upload a photo instead.");
+      setError("Camera access denied. Drop a photo or upload instead.");
     }
   }
 
@@ -98,37 +113,15 @@ export function SkyExplorer() {
     await ingestFile(new File([blob], "capture.jpg", { type: "image/jpeg" }));
   }
 
-  function useMyLocation() {
-    if (!navigator.geolocation) {
-      setError("Geolocation is not available in this browser.");
-      return;
-    }
-    setGeoBusy(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude.toFixed(5));
-        setLongitude(pos.coords.longitude.toFixed(5));
-        setGeoBusy(false);
-      },
-      () => {
-        setError("Could not read location. Enter lat/lon manually.");
-        setGeoBusy(false);
-      },
-      { enableHighAccuracy: true, timeout: 12000 }
-    );
-  }
-
   function buildMeta(): SkyCaptureMeta | null {
-    const lat = Number(latitude);
-    const lon = Number(longitude);
     const takenAtIso = localInputToIso(takenAt);
-    if (!Number.isFinite(lat) || !Number.isFinite(lon) || !takenAtIso) return null;
+    if (!place || !takenAtIso) return null;
     const facing = facingDegrees.trim() === "" ? undefined : Number(facingDegrees);
     return {
-      latitude: lat,
-      longitude: lon,
+      latitude: place.latitude,
+      longitude: place.longitude,
       takenAt: takenAtIso,
-      locationLabel: locationLabel.trim() || undefined,
+      locationLabel: place.label,
       facingDegrees:
         facing !== undefined && Number.isFinite(facing) ? facing : undefined,
       notes: notes.trim() || undefined,
@@ -139,7 +132,7 @@ export function SkyExplorer() {
     const meta = buildMeta();
     if (!meta || !dataUrl) {
       setError(
-        "Enter latitude, longitude, and when the photo was taken, and make sure a photo is loaded."
+        "Search and select a location on the map, set when the photo was taken, and make sure a photo is loaded."
       );
       return;
     }
@@ -182,11 +175,21 @@ export function SkyExplorer() {
     }
   }
 
+  function resetToCapture() {
+    setStep("capture");
+    setAnalysis(null);
+    setSelected(null);
+    setPreviewUrl(null);
+    setDataUrl(null);
+    setError(null);
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
   const meta = buildMeta();
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
-      <header className="max-w-2xl">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10 sm:max-w-5xl sm:px-6">
+      <header className="max-w-xl">
         <p className="text-xs uppercase tracking-[0.2em] text-sky-400/80">
           Night sky reveal
         </p>
@@ -194,116 +197,139 @@ export function SkyExplorer() {
           Illuminate what&apos;s overhead
         </h1>
         <p className="mt-3 text-base leading-relaxed text-zinc-400">
-          Capture or upload a night-sky photo, tell us where and when it was
-          taken, and Grok maps constellations onto your image — click a figure
-          to learn more.
+          Drop in a night-sky photo, add where and when, and Grok lights up what
+          it can actually see in the frame.
         </p>
       </header>
 
       {error ? (
         <div
           role="alert"
-          className="rounded border border-rose-900/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
+          className="rounded-md border border-rose-900/60 bg-rose-950/40 px-4 py-3 text-sm text-rose-200"
         >
           {error}
         </div>
       ) : null}
 
       {step === "capture" ? (
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="flex flex-col gap-4">
-            <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
-              1 · Photo
-            </h2>
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => fileRef.current?.click()}
-                className="rounded bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-white"
-              >
-                Upload picture
-              </button>
-              {!cameraOn ? (
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="rounded border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900"
-                >
-                  Use camera
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={snapPhoto}
-                    className="rounded bg-sky-500 px-4 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-sky-400"
-                  >
-                    Take picture
-                  </button>
-                  <button
-                    type="button"
-                    onClick={stopCamera}
-                    className="rounded border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300"
-                  >
-                    Cancel camera
-                  </button>
-                </>
-              )}
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void ingestFile(f);
-              }}
-            />
-            {cameraOn ? (
+        <section className="flex flex-col gap-5">
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void ingestFile(f);
+            }}
+          />
+
+          {cameraOn ? (
+            <div className="overflow-hidden rounded-xl border border-zinc-800 bg-black">
               <video
                 ref={videoRef}
                 playsInline
                 muted
-                className="aspect-[4/3] w-full rounded-lg bg-black object-cover"
+                className="aspect-[4/3] w-full object-cover"
               />
-            ) : (
-              <div className="flex aspect-[4/3] items-center justify-center rounded-lg border border-dashed border-zinc-800 bg-zinc-900/40 text-sm text-zinc-500">
-                Night sky photo appears here
+              <div className="flex flex-wrap gap-3 border-t border-zinc-800 p-4">
+                <button
+                  type="button"
+                  onClick={snapPhoto}
+                  className="rounded-md bg-sky-500 px-4 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-sky-400"
+                >
+                  Take picture
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="rounded-md border border-zinc-700 px-4 py-2.5 text-sm text-zinc-300 transition hover:border-zinc-500"
+                >
+                  Cancel
+                </button>
               </div>
-            )}
-          </div>
-          <div className="text-sm leading-relaxed text-zinc-500">
-            <p>
-              Tip: shoot away from streetlights, include a recognizable
-              constellation if you can, and note the direction you were facing.
-              Location and time let Grok cross-check what should actually be
-              above the horizon.
-            </p>
-          </div>
+            </div>
+          ) : (
+            <DropZone
+              onFile={(f) => void ingestFile(f)}
+              disabled={ingestBusy}
+              className="group relative flex aspect-[4/3] max-h-[min(28rem,70vh)] w-full cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-zinc-700 bg-zinc-900/50 px-6 text-center"
+            >
+              <button
+                type="button"
+                disabled={ingestBusy}
+                onClick={() => fileRef.current?.click()}
+                className="absolute inset-0 z-0 rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+                aria-label="Upload night sky photo"
+              />
+              <div className="pointer-events-none relative z-10 flex flex-col items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-700 bg-zinc-950/80 text-sky-300/90 group-data-[dragging=true]:border-sky-400/60">
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    aria-hidden
+                  >
+                    <path d="M12 16V4m0 0l-4 4m4-4l4 4" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M4 16.5V18a2 2 0 002 2h12a2 2 0 002-2v-1.5" strokeLinecap="round" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-base font-medium text-zinc-200">
+                    {ingestBusy
+                      ? "Preparing photo…"
+                      : "Drop a night-sky photo here"}
+                  </p>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    or click to browse · JPG / PNG
+                  </p>
+                </div>
+              </div>
+            </DropZone>
+          )}
+
+          {!cameraOn ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={ingestBusy}
+                className="rounded-md bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-white disabled:opacity-50"
+              >
+                Browse files
+              </button>
+              <button
+                type="button"
+                onClick={startCamera}
+                disabled={ingestBusy}
+                className="rounded-md border border-zinc-700 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-900 disabled:opacity-50"
+              >
+                Use camera
+              </button>
+              <p className="text-sm text-zinc-600">
+                Clear skies work best — avoid heavy light pollution in frame.
+              </p>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
       {step === "meta" && previewUrl ? (
-        <section className="grid gap-8 lg:grid-cols-2">
+        <section className="grid gap-8 lg:grid-cols-[1.1fr_1fr]">
           <div>
-            <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-zinc-500">
-              Preview
-            </h2>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewUrl}
               alt="Selected sky photo"
-              className="w-full rounded-lg"
+              className="w-full rounded-xl border border-zinc-800"
             />
             <button
               type="button"
-              onClick={() => {
-                setStep("capture");
-                setPreviewUrl(null);
-                setDataUrl(null);
-              }}
+              onClick={resetToCapture}
               className="mt-3 text-sm text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline"
             >
               Choose a different photo
@@ -312,50 +338,14 @@ export function SkyExplorer() {
 
           <div className="flex flex-col gap-4">
             <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
-              2 · Where & when
+              Where & when
             </h2>
 
-            <label className="flex flex-col gap-1.5 text-sm">
-              <span className="text-zinc-400">Place name (optional)</span>
-              <input
-                value={locationLabel}
-                onChange={(e) => setLocationLabel(e.target.value)}
-                placeholder="e.g. Berkeley hills"
-                className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="text-zinc-400">Latitude</span>
-                <input
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="37.87"
-                  className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="text-zinc-400">Longitude</span>
-                <input
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
-                  inputMode="decimal"
-                  placeholder="-122.27"
-                  className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
-                />
-              </label>
-            </div>
-
-            <button
-              type="button"
-              onClick={useMyLocation}
-              disabled={geoBusy}
-              className="self-start text-sm text-sky-400 hover:text-sky-300 disabled:opacity-50"
-            >
-              {geoBusy ? "Locating…" : "Use my current location"}
-            </button>
+            <LocationSearch
+              value={place}
+              onChange={setPlace}
+              onError={(msg) => setError(msg || null)}
+            />
 
             <label className="flex flex-col gap-1.5 text-sm">
               <span className="text-zinc-400">When was this taken?</span>
@@ -363,7 +353,7 @@ export function SkyExplorer() {
                 type="datetime-local"
                 value={takenAt}
                 onChange={(e) => setTakenAt(e.target.value)}
-                className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
+                className={fieldClass}
               />
             </label>
 
@@ -376,7 +366,7 @@ export function SkyExplorer() {
                 onChange={(e) => setFacingDegrees(e.target.value)}
                 inputMode="numeric"
                 placeholder="0 = North, 90 = East"
-                className="rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
+                className={fieldClass}
               />
             </label>
 
@@ -386,8 +376,8 @@ export function SkyExplorer() {
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                placeholder="e.g. looking toward the bay, Orion seemed left of frame"
-                className="resize-y rounded border border-zinc-800 bg-zinc-900 px-3 py-2 text-zinc-100 outline-none focus:border-sky-600"
+                placeholder="e.g. looking toward the bay"
+                className={`resize-y ${fieldClass}`}
               />
             </label>
 
@@ -395,7 +385,7 @@ export function SkyExplorer() {
               type="button"
               onClick={runAnalysis}
               disabled={pending}
-              className="mt-2 rounded bg-sky-500 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-1 rounded-md bg-sky-500 px-4 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {pending
                 ? `Grok is reading the sky… ${pendingSeconds}s`
@@ -406,7 +396,7 @@ export function SkyExplorer() {
       ) : null}
 
       {step === "result" && previewUrl && analysis ? (
-        <section className="flex flex-col gap-4">
+        <section className="flex flex-col gap-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold text-zinc-50">
@@ -423,22 +413,18 @@ export function SkyExplorer() {
             </div>
             <button
               type="button"
-              onClick={() => {
-                setStep("capture");
-                setAnalysis(null);
-                setSelected(null);
-                setPreviewUrl(null);
-                setDataUrl(null);
-              }}
+              onClick={resetToCapture}
               className="text-sm text-zinc-400 hover:text-zinc-200"
             >
               New photo
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-zinc-800">
+          <div className="overflow-hidden rounded-xl border border-zinc-800">
             <SkyOverlay
-              key={analysis.headline + analysis.figures.map((f) => f.id).join("-")}
+              key={
+                analysis.headline + analysis.figures.map((f) => f.id).join("-")
+              }
               imageUrl={previewUrl}
               analysis={analysis}
               selectedId={selected?.id ?? null}
@@ -446,12 +432,11 @@ export function SkyExplorer() {
             />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+          <div className="grid gap-4 lg:grid-cols-[1fr_300px]">
             <div className="flex flex-col gap-3">
               {!selected ? (
                 <p className="text-sm text-zinc-500">
-                  Watch the sky brighten — then faint lines appear. Tap a lit
-                  star or a chip below for details.
+                  Tap a lit star or a chip for details.
                 </p>
               ) : null}
               <ul className="flex flex-wrap gap-2">
@@ -478,7 +463,6 @@ export function SkyExplorer() {
               onClose={() => setSelected(null)}
             />
           </div>
-
         </section>
       ) : null}
     </div>

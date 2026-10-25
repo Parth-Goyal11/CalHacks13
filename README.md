@@ -20,12 +20,16 @@ npm run dev            # Next.js at http://localhost:3000
 npm run ingest         # index demo space events into Elasticsearch
 ```
 
+### Mission board (`/events`)
+
+Upcoming celestial windows (moons, meteor showers, launches, eclipses) ranked by **rarity** and **distance** from your map pin. Capture CTA links to `/sky`.
+
 ### Night-sky reveal (`/sky`)
 
 1. Open http://localhost:3000/sky
-2. Upload or capture a night-sky photo
-3. Enter location (lat/lon), time taken, optional facing direction
-4. Grok vision returns constellation stick figures overlaid on the image — click a figure for details / “Ask Grok for more”
+2. Drop / capture a night-sky photo
+3. Search a map location + time taken
+4. Grok vision illuminates figures it can actually see in the frame
 
 Requires `XAI_API_KEY` in the root `.env` (SpaceXAI track).
 
