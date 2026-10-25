@@ -79,14 +79,6 @@ export type {
 export { alignAnalysisToCatalog } from "./align-figures";
 export type { AlignResult, FigureAlignment } from "./align-figures";
 
-export {
-  getUpcomingCelestialEvents,
-  haversineKm,
-  pointsForEvent,
-  rankEvents,
-  RARITY_POINTS,
-  RARITY_RANK,
-} from "./celestial-events";
 export type {
   CelestialEvent,
   CelestialEventKind,

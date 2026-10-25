@@ -1,11 +1,11 @@
-import {
-  haversineKm,
-  type EventSortMode,
-  type ObserverLocation,
-  type RankedCelestialEvent,
-  type CelestialEventKind,
-  type EventRarity,
-} from "@calhacks13/lib";
+import { haversineKm } from "@calhacks13/lib/celestial-events";
+import type {
+  EventSortMode,
+  ObserverLocation,
+  RankedCelestialEvent,
+  CelestialEventKind,
+  EventRarity,
+} from "@calhacks13/lib/celestial-events";
 import {
   CELESTIAL_EVENTS_INDEX,
   createElasticClient,
