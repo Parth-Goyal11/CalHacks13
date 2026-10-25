@@ -14,6 +14,7 @@ import BottomNav from "./Navigation";
 import MemoriesScreen from "./MemoriesScreen";
 import CameraFlow from "./CameraFlow";
 import Discovery from "./Discovery";
+import SkyFinder from "./SkyFinder";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import { IMG, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
@@ -36,6 +37,7 @@ import {
 } from "./SkyLocation";
 import type { Place, CurrentWeather } from "./tonight-data";
 import { EventsBoard } from "@/components/events/EventsBoard";
+import type { RankedCelestialEvent } from "@calhacks13/lib";
 
 type LocalProfile = {
   name: string;
@@ -103,6 +105,7 @@ export default function YonderApp({
   const uploadInput = useRef<HTMLInputElement>(null);
   const pendingCapture = useRef<{ id: string; createdAt: string } | null>(null);
   const saveQueue = useRef(Promise.resolve());
+  const [skyFinderOpen, setSkyFinderOpen] = useState(false);
   const [captureTarget, setCaptureTarget] = useState("");
   const [savedPhotos, setSavedPhotos] = useState<SkyPhoto[]>([]);
   const [creatures, setCreatures] = useState<StoredCreature[]>([]);
@@ -166,6 +169,7 @@ export default function YonderApp({
     void hydrate();
     function onBack() {
       setCameraOpen(false);
+      setSkyFinderOpen(false);
       setCaptureTarget("");
       setActivePhoto(null);
       setSheet(null);
@@ -191,12 +195,26 @@ export default function YonderApp({
   }
   function openCamera(target?: string) {
     pushOverlay();
+    setSkyFinderOpen(false);
     setCaptureTarget(typeof target === "string" ? target : "");
+    setCameraOpen(true);
+  }
+  function openSkyFinder() {
+    pushOverlay();
+    setSkyFinderOpen(true);
+  }
+  function selectFinderEvent(event: RankedCelestialEvent) {
+    // Stay on the same overlay history entry; swap finder → capture.
+    setSkyFinderOpen(false);
+    setCaptureTarget(
+      `Capture target: ${event.title} (${event.kind.replaceAll("_", " ")}, ${event.rarity}, ${event.points} pts)`
+    );
     setCameraOpen(true);
   }
   function closeOverlay() {
     pendingCapture.current = null;
     setCameraOpen(false);
+    setSkyFinderOpen(false);
     setCaptureTarget("");
     setUploadedFile(null);
     setActivePhoto(null);
@@ -365,7 +383,12 @@ export default function YonderApp({
         </a>
         <div
           className="app-content"
-          inert={cameraOpen || Boolean(activePhoto) || Boolean(sheet)}
+          inert={
+            cameraOpen ||
+            skyFinderOpen ||
+            Boolean(activePhoto) ||
+            Boolean(sheet)
+          }
         >
           <div id="yonder-content" tabIndex={-1}>
             {activeTab === "home" && (
@@ -391,6 +414,7 @@ export default function YonderApp({
                 onRetry={sky.retry}
                 onLocation={() => setSheet("location")}
                 eventsPlace={eventsPlace}
+                onOpenSkyFinder={openSkyFinder}
               />
             )}
             {activeTab === "memories" && (
@@ -439,6 +463,13 @@ export default function YonderApp({
           aria-label="Upload a sky photo"
           onChange={onUploadChosen}
         />
+        {skyFinderOpen && (
+          <SkyFinder
+            place={sky.place}
+            onClose={closeOverlay}
+            onSelectEvent={selectFinderEvent}
+          />
+        )}
         {activePhoto && (
           <Discovery
             key={activePhoto.id}
@@ -753,6 +784,7 @@ function ExploreScreen({
   onRetry,
   onLocation,
   eventsPlace,
+  onOpenSkyFinder,
 }: {
   place: Place;
   locationChosen: boolean;
@@ -766,6 +798,7 @@ function ExploreScreen({
     latitude: number;
     longitude: number;
   };
+  onOpenSkyFinder: () => void;
 }) {
   return (
     <section
@@ -812,6 +845,17 @@ function ExploreScreen({
           <span role="status">Checking the sky…</span>
         )}
       </div>
+      <button
+        type="button"
+        className="sky-finder-launch"
+        onClick={onOpenSkyFinder}
+      >
+        <span>
+          <strong>Sky Finder</strong>
+          <span>Point your phone — see stars and live events</span>
+        </span>
+        <em>Open</em>
+      </button>
       <EventsBoard
         place={eventsPlace}
         locationChosen={locationChosen}
