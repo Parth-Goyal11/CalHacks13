@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element -- User photo object URLs need no image optimizer. */
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useEffectEvent, useRef, useState, type ChangeEvent } from "react";
 import type { SkyPhotoResult } from "./analysis";
 import { analyzeReveal } from "./reveal-analysis";
 import CaptureDetails, { captureMeta, type CaptureDraft } from "./CaptureDetails";
@@ -63,10 +63,13 @@ export default function CameraFlow({
   const [elapsed, setElapsed] = useState(0);
   const [sketch, setSketch] = useState<SceneSketch | null>(null);
   const [muted, setMuted] = useState(true);
+  const openInitialPhoto = useEffectEvent(() => {
+    if (initialFile) selectPhoto(initialFile);
+  });
 
   useEffect(() => {
     dialog.current?.showModal();
-    if (initialFile) selectPhoto(initialFile);
+    openInitialPhoto();
     return () => {
       captureSerial.current += 1;
       generation.current += 1;

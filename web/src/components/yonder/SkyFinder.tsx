@@ -15,7 +15,8 @@ import type { Place } from "./tonight-data";
 const FOV_DEG = 68;
 
 async function fetchNearbyEvents(
-  place: Place
+  place: Pick<Place, "latitude" | "longitude" | "name">,
+  signal: AbortSignal,
 ): Promise<RankedCelestialEvent[]> {
   const params = new URLSearchParams({
     sort: "distance",
@@ -25,7 +26,7 @@ async function fetchNearbyEvents(
     lon: String(place.longitude),
     label: place.name,
   });
-  const res = await fetch(`/api/celestial-events?${params}`, { cache: "no-store" });
+  const res = await fetch(`/api/celestial-events?${params}`, { cache: "no-store", signal });
   const text = await res.text();
   let data: { events?: RankedCelestialEvent[] } = {};
   try {
@@ -65,6 +66,7 @@ export default function SkyFinder({
   const [hintEventId, setHintEventId] = useState<string | null>(null);
 
   const attitude = useDeviceSkyAttitude(true, 0, 40);
+  const { latitude, longitude, name: placeName } = place;
 
   useEffect(() => {
     dialog.current?.showModal();
@@ -98,10 +100,14 @@ export default function SkyFinder({
           video.current.srcObject = media;
           await video.current.play();
         }
+        if (current !== generation.current) return;
         setCameraReady(true);
         setCameraError("");
       } catch (error) {
         if (current !== generation.current) return;
+        stream.current?.getTracks().forEach((track) => track.stop());
+        stream.current = null;
+        if (video.current) video.current.srcObject = null;
         const denied =
           error instanceof DOMException && error.name === "NotAllowedError";
         setCameraError(
@@ -121,17 +127,18 @@ export default function SkyFinder({
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     async function load() {
       try {
-        const next = await fetchNearbyEvents(place);
+        const next = await fetchNearbyEvents({ latitude, longitude, name: placeName }, controller.signal);
         if (!cancelled) {
           setEvents(next);
           setEventsError("");
           const iss = next.find((e) => e.kind === "iss_pass" && e.inRange);
-          if (iss) setHintEventId(iss.id);
+          setHintEventId(iss?.id ?? null);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelled && !controller.signal.aborted) {
           setEventsError("Sky events are unavailable.");
         }
       }
@@ -139,8 +146,9 @@ export default function SkyFinder({
     void load();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [place.latitude, place.longitude, place.name]);
+  }, [latitude, longitude, placeName]);
 
   // Re-project a few times a second so labels track motion smoothly.
   useEffect(() => {

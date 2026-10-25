@@ -1,6 +1,6 @@
 # Yonder video demo
 
-This is a 12-second portrait promo built with [Remotion](https://github.com/remotion-dev/remotion). It uses the same sky and user-supplied sample portraits as the web app. The clip is silent and contains no real account or location data.
+This is a 12-second portrait promo built with [Remotion](https://github.com/remotion-dev/remotion). It uses sky imagery and user-supplied portraits from the web app's public assets. The clip is silent, uses demo display names, and does not access account services or location data. It is a standalone promo rather than a recording of the current app.
 
 From the repository root:
 

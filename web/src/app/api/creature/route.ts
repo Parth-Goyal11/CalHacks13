@@ -1,6 +1,7 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "node:path";
 import { grok } from "@calhacks13/lib";
+import { inputErrorResponse, readJsonBody } from "@/lib/api-input";
 
 loadEnv({ path: resolve(process.cwd(), "../.env") });
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
@@ -18,14 +19,9 @@ const TIER_LOOK: Record<string, string> = {
 };
 
 export async function POST(request: Request) {
-  if (!request.headers.get("content-type")?.includes("application/json")) {
-    return Response.json({ error: "Send a JSON pattern name." }, { status: 415 });
-  }
-  const body = (await request.json().catch(() => null)) as {
-    name?: unknown;
-    motif?: unknown;
-    tier?: unknown;
-  } | null;
+  let body: Record<string, unknown>;
+  try { body = await readJsonBody(request, 16 * 1024); }
+  catch (error) { return inputErrorResponse(error) ?? Response.json({ error: "Invalid request." }, { status: 400 }); }
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
   const motif = typeof body?.motif === "string" ? body.motif.trim().slice(0, 80) : "";
   const tier = typeof body?.tier === "string" && TIERS.has(body.tier) ? body.tier : "";

@@ -36,11 +36,11 @@ Design source: https://www.figma.com/make/lK1XPXSmzeAS9AsI4RDzyu/Design-Your-Sky
 - The minimal loading screen stays visible for the real request. Cancel returns to review and retains the photo. There are no simulated percentages or artificial processing delays.
 - Results distinguish plate-solved identities, model estimates and incomplete reviews. Solver diagnostics are filtered out of object names. Zero named objects and non-sky photos have separate states.
 - The API now includes optional `annotations` with solver-verified normalized coordinates. Rings use the rendered image's contained bounds, including its letterboxing. Model estimates never receive invented positions. The existing annotated JPEG remains available.
-- Memories store the photo Blob and analysis in IndexedDB on the current device and origin. Saving, reopening, removing and reloading are connected. Profile fields and notes can be edited locally; profile counts and streaks derive from real saved photos.
+- Memories store the photo Blob and analysis in IndexedDB on the current device and origin. Saving, reopening, removing and reloading are connected. Profile fields and notes can be edited locally. Demo profile counts start at 34 skies, 87 discoveries and 6 places, with a seven-night minimum streak; real saved photos add to those baseline counts.
 - Location selection and approximate device location connect to the existing city search and Open-Meteo endpoints. Weather refreshes every five minutes. Berkeley is the initial default.
 - `/loading` is a standalone visual preview; `app/loading.tsx` also supplies the route-loading fallback.
 
-Friends/Nearby posts remain explicitly labeled samples. Explore offers current weather and photographic inspiration; its photographs are not a live visibility prediction. The Figma Make file remains a demo prototype; the repo contains the actual API integration.
+Home shows prepared demo posts with named sky highlights and local likes/comments; it has no Friends/Nearby filter. Curated Memories use the supplied sky photographs, with catalog-matched and preview annotations distinguished in their details. Explore offers a sky map and phone-orientation finder, plus a link to upcoming events. These are observing guides, not a guarantee of visibility through clouds or local obstructions. The Figma Make file remains a demo prototype; the repo contains the actual API integration.
 
 ## What you need to do for live image identification
 
@@ -49,7 +49,7 @@ Friends/Nearby posts remain explicitly labeled samples. Explore offers current w
 3. Restart the Python service after editing `.env`. The `npm run sky-photo` command now loads `.env` using python-dotenv. It requires the Python environment to be active; the direct command below does not.
 4. Test an actual night-sky JPEG on a physical iPhone over HTTPS. Check camera permission granted and denied, shutter, gallery, retake, loading cancel, analysis, object details and saved Memories after reload. HEIC decoding is supported by the backend, but browser preview support still varies.
 
-From `C:\Users\jason\Documents\Codex\CalHacks13`, use two terminals:
+From the repository root, use two terminals:
 
 ```powershell
 # Terminal A: backend. Create the environment only if needed.
@@ -65,7 +65,7 @@ npm install
 npm run dev -w web -- --hostname 127.0.0.1 --port 3003
 ```
 
-Open http://127.0.0.1:3003. Backend health is http://127.0.0.1:8000/health. The verification backend started during this task intentionally has no provider keys, so stop that process before starting the configured command above. Without credentials, image metrics still work and the UI reports Needs review instead of inventing names or a score.
+Open http://127.0.0.1:3003. Backend health is http://127.0.0.1:8000/health. If another process already uses port 8000, stop it before starting the configured command above. Without credentials, image metrics still work and the UI reports Needs review instead of inventing names or a score.
 
 ## What remains for the full shared app
 
@@ -83,7 +83,7 @@ Do not combine the entire Vite scaffold from a new Figma export with the Next.js
 - Production build, workspace TypeScript checks and web ESLint passed.
 - 56 Python tests passed, including normalized marker positions, bounds validation, deduplication and the rule that an unsolved image has no markers.
 - Runtime adapter checks passed for multipart compatibility, partial HTTP 504 results, non-sky/service errors, diagnostic filtering, deduplication, annotation paths and model-estimate isolation.
-- Browser upload of the repository's synthetic night-sky fixture passed through Next.js and the real FastAPI metrics pipeline, rendered Needs review without fake celestial names, saved to IndexedDB and survived reload. The agent-created test Memory was removed through the UI afterward.
+- Browser upload of the repository's synthetic night-sky fixture passed through Next.js and the real FastAPI metrics pipeline, rendered Needs review without fake celestial names, saved to IndexedDB and survived reload. The test Memory was removed through the UI afterward.
 - A daytime fixture returned to the chosen photo with an explanation and retry. City selection updated weather/coordinates. Profile edits survived reload.
 - Layout checks at 320, 390, 768 and 1440px showed no horizontal page/screen overflow; all five navigation controls remained at least 44px in both dimensions.
 - Figma camera/loading changes built successfully, and the dedicated loading page and camera error/cancel states were inspected.

@@ -13,6 +13,8 @@
     "sky-photo": "uvicorn sky_photo.main:app --reload --env-file .env --host 127.0.0.1 --port 8000",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:yonder": "tsx --tsconfig web/tsconfig.json tests/yonder-reveal.test.ts",
+    "test:yonder-memory": "tsx --tsconfig web/tsconfig.json tests/yonder-memory.test.ts",
+    "test:api-input": "tsx --tsconfig web/tsconfig.json tests/api-input.test.ts",
     "test:sky-catalog": "tsx lib/scripts/verify-accuracy.mts",
     "video:studio": "npm --prefix video run studio",
     "video:render": "npm --prefix video run render"
@@ -21,6 +23,7 @@
     "node": ">=20"
   },
   "devDependencies": {
+    "fake-indexeddb": "6.2.6",
     "tsx": "^4.23.15"
   }
 }

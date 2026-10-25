@@ -127,15 +127,22 @@ export default function NightSkyMap({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const cameraRequest = useRef(0);
+  const cameraPending = useRef(false);
+  const mounted = useRef(true);
   const hits = useRef<{ object: SkyObject; x: number; y: number }[]>([]);
-  const [chart, setChart] = useState<SkyChart | null>(null);
-  const [error, setError] = useState("");
+  const chartKey = `${latitude}:${longitude}`;
+  const [chartResult, setChartResult] = useState<{ key: string; chart: SkyChart | null; error: string } | null>(null);
+  const chart = chartResult?.key === chartKey ? chartResult.chart : null;
+  const [cameraError, setCameraError] = useState("");
+  const error = cameraError || (chartResult?.key === chartKey ? chartResult.error : "");
   const [heading, setHeading] = useState(0);
   const [tilt, setTilt] = useState(38);
   const [roll, setRoll] = useState(0);
   const [fov, setFov] = useState(68);
   const [follow, setFollow] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const attitude = useDeviceSkyAttitude(follow, heading, tilt);
@@ -146,7 +153,6 @@ export default function NightSkyMap({
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
-    setError("");
     const params = new URLSearchParams({
       lat: String(latitude),
       lon: String(longitude),
@@ -158,17 +164,17 @@ export default function NightSkyMap({
         if (!response.ok || !data?.objects) {
           throw new Error("The night sky could not be placed.");
         }
-        setChart(data);
+        setChartResult({ key: chartKey, chart: data, error: "" });
       })
       .catch(() => {
         if (!active || controller.signal.aborted) return;
-        setError("The night sky could not be placed.");
+        setChartResult({ key: chartKey, chart: null, error: "The night sky could not be placed." });
       });
     return () => {
       active = false;
       controller.abort();
     };
-  }, [latitude, longitude]);
+  }, [latitude, longitude, chartKey]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -182,8 +188,13 @@ export default function NightSkyMap({
   }, []);
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
+      cameraRequest.current += 1;
+      cameraPending.current = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
     };
   }, []);
 
@@ -278,26 +289,47 @@ export default function NightSkyMap({
   }, [aimHeading, aimTilt, cameraOn, chart, fov, frame, lines, roll, selectedId]);
 
   async function toggleCamera() {
-    if (cameraOn) {
+    setCameraError("");
+    if (cameraOn || cameraPending.current) {
+      cameraRequest.current += 1;
+      cameraPending.current = false;
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       if (videoRef.current) videoRef.current.srcObject = null;
       setCameraOn(false);
+      setCameraStarting(false);
       return;
     }
+    const request = ++cameraRequest.current;
+    cameraPending.current = true;
+    setCameraStarting(true);
     try {
       const media = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { facingMode: { ideal: "environment" } },
       });
+      if (!mounted.current || request !== cameraRequest.current) {
+        media.getTracks().forEach((track) => track.stop());
+        return;
+      }
       streamRef.current = media;
       if (videoRef.current) {
         videoRef.current.srcObject = media;
         await videoRef.current.play();
       }
+      if (!mounted.current || request !== cameraRequest.current) return;
       setCameraOn(true);
     } catch {
-      setError("The camera stayed off. The sliders still turn the map.");
+      if (!mounted.current || request !== cameraRequest.current) return;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setCameraError("The camera stayed off. The sliders still turn the map.");
+    } finally {
+      if (mounted.current && request === cameraRequest.current) {
+        cameraPending.current = false;
+        setCameraStarting(false);
+      }
     }
   }
 
@@ -344,7 +376,7 @@ export default function NightSkyMap({
           {follow ? "Use manual controls" : "Follow my phone"}
         </button>
         <button type="button" onClick={() => void toggleCamera()}>
-          {cameraOn ? "Turn camera off" : "Turn camera on"}
+          {cameraOn ? "Turn camera off" : cameraStarting ? "Cancel camera" : "Turn camera on"}
         </button>
       </div>
       <details className="night-sky-manual">

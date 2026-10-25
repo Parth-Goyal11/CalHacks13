@@ -60,7 +60,7 @@ Attach tools A–C. Test in Agent Builder chat:
 
 1. Open **Tools → MCP server** and copy `{KIBANA_URL}/api/agent_builder/mcp`.
 2. Create an API key with Agent Builder privileges.
-3. Connect Cursor / Claude Desktop as an MCP host to that URL + API key.
+3. Connect Cursor as an MCP host to that URL + API key.
 4. Demo: ask the external host the same questions — tools run against `celestial-events`.
 
 Docs: [Agent Builder MCP server](https://www.elastic.co/docs/explore-analyze/ai-features/agent-builder/mcp-server)
@@ -81,7 +81,7 @@ Docs: custom tools include a **Workflow** type — [Custom tools](https://www.el
 
 1. Explore tab UI → show live geo-ranked events + hybrid search.  
 2. Kibana Agent Builder → same question answered via ES|QL / index search tools.  
-3. Cursor/Claude via MCP → one tool call on `celestial-events`.  
+3. Cursor via MCP → one tool call on `celestial-events`.
 4. Mention Workflow schedule for ingest (even if Node ingest still exists as fallback).
 
 ## Strong vs weak

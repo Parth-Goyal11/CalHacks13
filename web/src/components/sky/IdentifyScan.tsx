@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import type { BrightPoint, SceneSketch } from "@/lib/sample-scene";
 
 const EMPTY_POINTS: BrightPoint[] = [];
@@ -34,14 +35,9 @@ export function IdentifyScan({
 }: IdentifyScanProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [reduced, setReduced] = useState(false);
+  const reduced = usePrefersReducedMotion();
   const points = sketch?.points ?? EMPTY_POINTS;
   const copy = phaseCopy(elapsed, points.length);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(media.matches);
-  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -75,7 +71,7 @@ export function IdentifyScan({
         ctx.fillRect(0, y - 36, w, 72);
       }
 
-      if (t > 3.2) {
+      if (reduced || t > 3.2) {
         ctx.lineWidth = 1.25;
         ctx.lineCap = "round";
         for (let i = 0; i < count; i++) {
@@ -122,11 +118,16 @@ export function IdentifyScan({
         ctx.fill();
       }
 
-      raf = requestAnimationFrame(draw);
+      if (!reduced) raf = requestAnimationFrame(draw);
     };
 
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    const observer = reduced ? new ResizeObserver(() => draw(performance.now())) : null;
+    observer?.observe(stage);
+    return () => {
+      cancelAnimationFrame(raf);
+      observer?.disconnect();
+    };
   }, [points, reduced]);
 
   return (

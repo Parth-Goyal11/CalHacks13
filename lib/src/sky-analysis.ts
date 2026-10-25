@@ -340,7 +340,7 @@ export interface SkyAnalysisWithScore {
  * Points / rarity are computed in sky-score.ts after sanitize.
  */
 export async function analyzeNightSky(options: {
-  imageBase64: string;
+  imageBytes: Uint8Array;
   mimeType?: string;
   meta: SkyCaptureMeta;
   model?: string;
@@ -349,9 +349,6 @@ export async function analyzeNightSky(options: {
   const modelId = options.model ?? VISION_MODEL;
   const model = xai(modelId);
   const mimeType = options.mimeType ?? "image/jpeg";
-  const base64 = options.imageBase64.startsWith("data:")
-    ? options.imageBase64.slice(options.imageBase64.indexOf(",") + 1)
-    : options.imageBase64;
 
   console.log(`[sky-analysis] ${modelId}…`);
   const started = Date.now();
@@ -377,7 +374,7 @@ export async function analyzeNightSky(options: {
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image", image: base64, mimeType },
+              { type: "image", image: options.imageBytes, mimeType },
             ],
           },
         ],

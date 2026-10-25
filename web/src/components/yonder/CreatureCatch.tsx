@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { creatureGift, qualityTracks, type StoredCreature } from "./collection";
 import ConstellationMap from "./ConstellationMap";
 import CreaturePortrait from "./CreaturePortrait";
@@ -16,21 +17,19 @@ export default function CreatureCatch({
   settle: boolean;
   onFormed?: (creature: StoredCreature) => void;
 }) {
-  const [progress, setProgress] = useState(settle ? 1 : 0);
-  const formed = useRef(false);
-  const creatureRef = useRef(creature);
-  const onFormedRef = useRef(onFormed);
-  creatureRef.current = creature;
-  onFormedRef.current = onFormed;
+  const [animation, setAnimation] = useState({ id: creature.id, progress: 0 });
+  const reduced = usePrefersReducedMotion();
+  const progress = settle || reduced ? 1 : animation.id === creature.id ? animation.progress : 0;
+  const formed = useRef(new Set<string>());
+  const notifyFormed = useEffectEvent(() => onFormed?.(creature));
   const tracks = creature.tracks?.length ? creature.tracks : qualityTracks(creature);
   const gift = creatureGift(creature);
 
   useEffect(() => {
-    if (settle) {
-      setProgress(1);
-      if (!formed.current) {
-        formed.current = true;
-        onFormedRef.current?.(creatureRef.current);
+    if (settle || reduced) {
+      if (!formed.current.has(creature.id)) {
+        formed.current.add(creature.id);
+        notifyFormed();
       }
       return;
     }
@@ -40,14 +39,14 @@ export default function CreatureCatch({
     const tick = (now: number) => {
       if (cancel) return;
       const next = Math.min(1, (now - start) / Math.max(durationMs, 1));
-      setProgress(next);
+      setAnimation({ id: creature.id, progress: next });
       if (next < 1) {
         frame = requestAnimationFrame(tick);
         return;
       }
-      if (!formed.current) {
-        formed.current = true;
-        onFormedRef.current?.(creatureRef.current);
+      if (!formed.current.has(creature.id)) {
+        formed.current.add(creature.id);
+        notifyFormed();
       }
     };
     frame = requestAnimationFrame(tick);
@@ -55,7 +54,7 @@ export default function CreatureCatch({
       cancel = true;
       cancelAnimationFrame(frame);
     };
-  }, [creature.id, durationMs, settle]);
+  }, [creature.id, durationMs, settle, reduced]);
 
   return (
     <article

@@ -245,7 +245,7 @@ export default function Discovery({
           {result?.needs_review && (
             <p className="review-note">
               {result.identity?.method === "captured"
-                ? "This photo is saved in Memories. Analyze it to identify the sky."
+                ? "Analyze this photo to identify the sky."
                 : result.identity?.method === "plate-solved"
                   ? "Star positions are solved. The vision review is unavailable."
                   : "Identification needs review. Model suggestions are not confirmed detections."}

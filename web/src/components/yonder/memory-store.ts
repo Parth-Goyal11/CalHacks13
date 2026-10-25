@@ -135,12 +135,20 @@ export async function readCreature(id: string): Promise<StoredCreature | null> {
   }
 }
 
-async function writeCreature(creature: StoredCreature): Promise<void> {
+async function updateCreature(
+  id: string,
+  update: (existing: StoredCreature | null) => StoredCreature | null,
+): Promise<void> {
   const db = await database();
   try {
     await new Promise<void>((resolve, reject) => {
       const transaction = db.transaction(CREATURES, "readwrite");
-      transaction.objectStore(CREATURES).put(creature);
+      const store = transaction.objectStore(CREATURES);
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const next = update((request.result as StoredCreature | undefined) ?? null);
+        if (next) store.put(next);
+      };
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () =>
@@ -152,51 +160,30 @@ async function writeCreature(creature: StoredCreature): Promise<void> {
 }
 
 export async function saveCreatureImage(draft: StoredCreature, image: Blob): Promise<void> {
-  const existing = await readCreature(draft.id);
-  const base = existing ?? draft;
-  const next =
-    tierRank(draft.tier) >= tierRank(base.tier)
-      ? { ...base, ...draft, image }
-      : { ...base, image: base.image ?? image };
-  await writeCreature(next);
+  await updateCreature(draft.id, (existing) => {
+    if (existing && tierRank(draft.tier) < tierRank(existing.tier)) return null;
+    return { ...existing, ...draft, image };
+  });
 }
 
 export async function collectOne(creature: StoredCreature): Promise<StoredCreature[]> {
-  const current = await readCreatures();
-  const byId = new Map(current.map((item) => [item.id, item]));
-  const previous = byId.get(creature.id);
-  if (!previous || tierRank(creature.tier) > tierRank(previous.tier)) {
-    const next = {
-      ...creature,
-      image: previous?.image,
-      caughtAt: new Date().toISOString(),
-    };
-    byId.set(creature.id, next);
-    await writeCreature(next);
-  }
-  return [...byId.values()].sort(
-    (a, b) => tierRank(b.tier) - tierRank(a.tier) || a.name.localeCompare(b.name),
+  await updateCreature(creature.id, (previous) =>
+    !previous || tierRank(creature.tier) > tierRank(previous.tier)
+      ? { ...creature, image: undefined, caughtAt: new Date().toISOString() }
+      : null,
   );
+  return readCreatures();
 }
 
 export async function collectCreatures(result: SkyPhotoResult): Promise<StoredCreature[]> {
   const incoming = creaturesFrom(result);
   if (!incoming.length) return readCreatures();
-  const current = await readCreatures();
-  const byId = new Map(current.map((creature) => [creature.id, creature]));
   for (const creature of incoming) {
-    const previous = byId.get(creature.id);
-    if (!previous || tierRank(creature.tier) > tierRank(previous.tier)) {
-      const next = {
-        ...creature,
-        image: previous?.image,
-        caughtAt: new Date().toISOString(),
-      };
-      byId.set(creature.id, next);
-      await writeCreature(next);
-    }
+    await updateCreature(creature.id, (previous) =>
+      !previous || tierRank(creature.tier) > tierRank(previous.tier)
+        ? { ...creature, image: undefined, caughtAt: new Date().toISOString() }
+        : null,
+    );
   }
-  return [...byId.values()].sort(
-    (a, b) => tierRank(b.tier) - tierRank(a.tier) || a.name.localeCompare(b.name),
-  );
+  return readCreatures();
 }

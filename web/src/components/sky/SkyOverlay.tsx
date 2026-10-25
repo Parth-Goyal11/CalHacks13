@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import {
   figureIdentity,
   type SignificantFeature,
@@ -81,43 +82,39 @@ export function SkyOverlay({
 }: SkyOverlayProps) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [reveal, setReveal] = useState(progressive ? 1 : 0);
-  const [draw, setDraw] = useState(1);
+  const reduced = usePrefersReducedMotion();
+  const [revealFrame, setReveal] = useState({ imageUrl, value: 0 });
+  const [drawFrame, setDraw] = useState({ id: spotlightId, value: 0 });
+  const reveal = progressive || reduced ? 1 : revealFrame.imageUrl === imageUrl ? revealFrame.value : 0;
+  const draw = !spotlightId || reduced ? 1 : drawFrame.id === spotlightId ? drawFrame.value : 0;
   const [size, setSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
-    if (!spotlightId) {
-      setDraw(1);
-      return;
-    }
+    if (!spotlightId || reduced) return;
     let raf = 0;
     const start = performance.now();
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / 1100);
-      setDraw(easeOut(t));
+      setDraw({ id: spotlightId, value: easeOut(t) });
       if (t < 1) raf = requestAnimationFrame(tick);
     };
-    setDraw(0);
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [spotlightId]);
+  }, [spotlightId, reduced]);
 
   useEffect(() => {
-    if (progressive) {
-      setReveal(1);
-      return;
-    }
+    if (progressive || reduced) return;
     let raf = 0;
     const start = performance.now();
     const duration = 4000;
     const tick = (now: number) => {
       const t = Math.min(1, (now - start) / duration);
-      setReveal(easeOut(t));
+      setReveal({ imageUrl, value: easeOut(t) });
       if (t < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [progressive]);
+  }, [progressive, reduced, imageUrl]);
 
   useEffect(() => {
     const el = stageRef.current;

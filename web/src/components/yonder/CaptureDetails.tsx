@@ -1,5 +1,5 @@
 import type { SkyCaptureMeta } from "@calhacks13/lib";
-import { useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { localInputToIso } from "@/lib/image";
 
 export type CaptureDraft = { latitude: string; longitude: string; takenAt: string; facing: string; elevation: string; fov: string; notes: string };
@@ -13,15 +13,27 @@ export function captureMeta(draft: CaptureDraft): SkyCaptureMeta | null {
   return { latitude, longitude, takenAt, facingDegrees: draft.facing ? Number(draft.facing) : undefined, elevationDegrees: draft.elevation ? Number(draft.elevation) : undefined, fovDegrees: draft.fov ? Number(draft.fov) : undefined, notes: draft.notes.trim() || undefined };
 }
 
-export default function CaptureDetails({ draft, onChange, error }: { draft: CaptureDraft; onChange: (draft: CaptureDraft) => void; error: string }) {
+export default function CaptureDetails({ draft, onChange, error }: { draft: CaptureDraft; onChange: Dispatch<SetStateAction<CaptureDraft>>; error: string }) {
   const [geoError, setGeoError] = useState("");
   const [locating, setLocating] = useState(false);
-  const field = (key: keyof CaptureDraft, value: string) => onChange({ ...draft, [key]: value });
+  const locationRequest = useRef(0);
+  useEffect(() => () => { locationRequest.current += 1; }, []);
+  const field = (key: keyof CaptureDraft, value: string) => onChange((current) => ({ ...current, [key]: value }));
   function locate() {
     if (!navigator.geolocation) { setGeoError("Location is unavailable. Enter the photo coordinates below."); return; }
+    const request = ++locationRequest.current;
     setLocating(true);
     setGeoError("");
-    navigator.geolocation.getCurrentPosition(({ coords }) => { onChange({ ...draft, latitude: coords.latitude.toFixed(5), longitude: coords.longitude.toFixed(5) }); setLocating(false); }, () => { setGeoError("Could not read location. Enter the photo coordinates below."); setLocating(false); }, { timeout: 12000 });
+    navigator.geolocation.getCurrentPosition(({ coords }) => {
+      if (request !== locationRequest.current) return;
+      const latitude = coords.latitude.toFixed(5), longitude = coords.longitude.toFixed(5);
+      onChange((current) => ({ ...current, latitude, longitude }));
+      setLocating(false);
+    }, () => {
+      if (request !== locationRequest.current) return;
+      setGeoError("Could not read location. Enter the photo coordinates below.");
+      setLocating(false);
+    }, { timeout: 12000 });
   }
   return <section className="capture-details" aria-label="Photo location and time">
     <h2>Where was your sky?</h2>

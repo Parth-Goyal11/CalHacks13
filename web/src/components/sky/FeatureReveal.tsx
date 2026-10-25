@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import type { SignificantFeature, SkyAnalysis, SkyFigure } from "@calhacks13/lib";
 import { figureIdentity } from "@calhacks13/lib";
 import { creatureFromObject, type StoredCreature } from "@/components/yonder/collection";
@@ -60,19 +61,12 @@ export function FeatureReveal({
       ),
     [order],
   );
-  const [step, setStep] = useState(0);
-  const [reduced, setReduced] = useState(false);
+  const [animatedStep, setStep] = useState(0);
+  const reduced = usePrefersReducedMotion();
   const settledAt = order.length + 2;
-  const onSettledRef = useRef(onSettled);
-  onSettledRef.current = onSettled;
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (media.matches) {
-      setReduced(true);
-      setStep(settledAt);
-    }
-  }, [settledAt]);
+  const step = reduced ? settledAt : animatedStep;
+  const notifySettled = useEffectEvent(() => onSettled?.());
+  const settledOnce = useRef(false);
 
   useEffect(() => {
     if (reduced || step >= settledAt) return;
@@ -83,7 +77,10 @@ export function FeatureReveal({
   }, [step, settledAt, order.length, reduced]);
 
   useEffect(() => {
-    if (step >= settledAt) onSettledRef.current?.();
+    if (step >= settledAt && !settledOnce.current) {
+      settledOnce.current = true;
+      notifySettled();
+    }
   }, [step, settledAt]);
 
   const featureIndex = step - 1;
@@ -91,13 +88,12 @@ export function FeatureReveal({
   const showingTotal = step === order.length + 1;
   const settled = step >= settledAt;
   const active = showingFeature ? order[featureIndex] : null;
-  const onCatchRef = useRef(onCatch);
+  const notifyCatch = useEffectEvent((feature: SignificantFeature) => onCatch?.(feature));
   const flourishedId = useRef<string | null>(null);
-  onCatchRef.current = onCatch;
   useEffect(() => {
     if (!active || flourishedId.current === active.figureId) return;
     flourishedId.current = active.figureId;
-    onCatchRef.current?.(active);
+    notifyCatch(active);
   }, [active]);
   const unlocked = useMemo(() => {
     if (settled || reduced) return null;

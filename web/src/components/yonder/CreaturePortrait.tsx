@@ -1,28 +1,30 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import type { StoredCreature } from "./collection";
 import { readCreature, saveCreatureImage } from "./memory-store";
 
 export default function CreaturePortrait({ creature }: { creature: StoredCreature }) {
+  return <PortraitImage key={`${creature.id}:${creature.tier}`} creature={creature} />;
+}
+
+function PortraitImage({ creature }: { creature: StoredCreature }) {
   const { id, tier } = creature;
-  const draftRef = useRef(creature);
-  draftRef.current = creature;
+  const getDraft = useEffectEvent(() => creature);
   const [url, setUrl] = useState<string | null>(null);
   const [status, setStatus] = useState("Forming…");
 
   useEffect(() => {
     let cancel = false;
     let objectUrl = "";
-    const draft = draftRef.current;
-    setUrl(null);
-    setStatus("Forming…");
+    const controller = new AbortController();
+    const draft = getDraft();
 
     async function load() {
       const stored = await readCreature(id);
       if (cancel) return;
       const cached = stored?.image && stored.tier === tier ? stored.image : null;
-      const blob = cached ?? (await renderCreature(draft));
+      const blob = cached ?? (await renderCreature(draft, controller.signal));
       if (cancel || !blob) return;
       if (!cached) await saveCreatureImage(draft, blob);
       objectUrl = URL.createObjectURL(blob);
@@ -46,6 +48,7 @@ export default function CreaturePortrait({ creature }: { creature: StoredCreatur
 
     return () => {
       cancel = true;
+      controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [id, tier]);
@@ -62,9 +65,10 @@ export default function CreaturePortrait({ creature }: { creature: StoredCreatur
   );
 }
 
-async function renderCreature(creature: StoredCreature): Promise<Blob | null> {
+async function renderCreature(creature: StoredCreature, signal: AbortSignal): Promise<Blob | null> {
   const response = await fetch("/api/creature", {
     method: "POST",
+    signal,
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
       name: creature.name,

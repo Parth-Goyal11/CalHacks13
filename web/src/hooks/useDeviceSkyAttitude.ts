@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 export type AttitudeSource = "device" | "manual" | "unavailable";
 
@@ -24,6 +24,21 @@ type Doe = DeviceOrientationEvent & {
   absolute?: boolean;
 };
 
+type OrientationConstructor = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<"granted" | "denied">;
+};
+
+function getOrientationSupport() {
+  const constructor = window.DeviceOrientationEvent as OrientationConstructor | undefined;
+  if (!constructor) return "unsupported";
+  return typeof constructor.requestPermission === "function" ? "gesture" : "automatic";
+}
+
+function subscribeToSupport() {
+  // API availability does not change during a page session.
+  return () => {};
+}
+
 function wrap360(d: number): number {
   let x = d % 360;
   if (x < 0) x += 360;
@@ -45,7 +60,7 @@ function attitudeFromOrientation(event: Doe): {
 } | null {
   const beta = event.beta;
   const alpha = event.alpha;
-  if (beta == null || alpha == null) return null;
+  if (beta == null || alpha == null || !Number.isFinite(beta) || !Number.isFinite(alpha)) return null;
 
   const compass = event.webkitCompassHeading;
   const absolute =
@@ -76,10 +91,10 @@ export function useDeviceSkyAttitude(
 ): SkyAttitude {
   const [azimuthDeg, setAzimuthDeg] = useState(initialAzimuth);
   const [elevationDeg, setElevationDeg] = useState(initialElevation);
-  const [source, setSource] = useState<AttitudeSource>("manual");
-  const [permission, setPermission] = useState<
-    SkyAttitude["permission"]
-  >("unknown");
+  const [source, setSource] = useState<AttitudeSource | null>(null);
+  const [permissionResult, setPermission] = useState<SkyAttitude["permission"] | null>(null);
+  const support = useSyncExternalStore(subscribeToSupport, getOrientationSupport, () => "unknown");
+  const permission = support === "unsupported" ? "unsupported" : permissionResult ?? (support === "automatic" ? "granted" : "unknown");
   const [absolute, setAbsolute] = useState(false);
   const manualRef = useRef(false);
   const rafRef = useRef(0);
@@ -101,9 +116,12 @@ export function useDeviceSkyAttitude(
 
   const requestPermission = useCallback(async () => {
     if (typeof window === "undefined") return false;
-    const DOE = DeviceOrientationEvent as unknown as {
-      requestPermission?: () => Promise<"granted" | "denied">;
-    };
+    const DOE = window.DeviceOrientationEvent as OrientationConstructor | undefined;
+    if (!DOE) {
+      setPermission("unsupported");
+      setSource("unavailable");
+      return false;
+    }
     try {
       if (typeof DOE.requestPermission === "function") {
         const result = await DOE.requestPermission();
@@ -124,13 +142,7 @@ export function useDeviceSkyAttitude(
   }, []);
 
   useEffect(() => {
-    if (!enabled || typeof window === "undefined") return;
-
-    if (!("DeviceOrientationEvent" in window)) {
-      setPermission("unsupported");
-      setSource("unavailable");
-      return;
-    }
+    if (!enabled || permission !== "granted") return;
 
     const flush = () => {
       rafRef.current = 0;
@@ -156,26 +168,19 @@ export function useDeviceSkyAttitude(
       }
     };
 
-    // Non-iOS: start listening immediately. iOS needs an explicit grant.
-    const DOE = DeviceOrientationEvent as unknown as {
-      requestPermission?: () => Promise<"granted" | "denied">;
-    };
-    const needsGesture = typeof DOE.requestPermission === "function";
-    if (!needsGesture) {
-      setPermission("granted");
-    }
-
     window.addEventListener("deviceorientation", onOrientation, true);
     return () => {
       window.removeEventListener("deviceorientation", onOrientation, true);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = 0;
+      pendingRef.current = null;
     };
-  }, [enabled]);
+  }, [enabled, permission]);
 
   return {
     azimuthDeg,
     elevationDeg,
-    source,
+    source: source ?? (support === "unsupported" ? "unavailable" : "manual"),
     permission,
     absolute,
     setManualAzimuth,
