@@ -435,3 +435,202 @@
   transform: scale(calc(0.35 + var(--form, 0) * 0.65));
   transform-origin: center 70%;
 }
+
+.memory-collection {
+  padding: 0 16px 8px;
+}
+
+.memory-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 6px 12px;
+}
+
+.memory-intro p {
+  max-width: 230px;
+  margin: 0;
+  color: var(--mist);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.memory-intro button {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 12px;
+}
+
+.tier-rail,
+.memory-rail {
+  display: flex;
+  gap: 10px;
+  margin: 0 -16px 12px;
+  padding: 0 16px 4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.tier-rail::-webkit-scrollbar,
+.memory-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.tier-rail {
+  list-style: none;
+}
+
+.tier-rail li {
+  flex: 0 0 168px;
+  scroll-snap-align: start;
+  display: grid;
+  gap: 4px;
+  min-height: 88px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 13px;
+}
+
+.tier-rail span {
+  color: var(--mist);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.memory-rail {
+  list-style: none;
+}
+
+.memory-card {
+  flex: 0 0 168px;
+  scroll-snap-align: start;
+  border-radius: 22px;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.memory-card.tier-s {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 214, 120, 0.72),
+    0 0 18px rgba(255, 196, 92, 0.18);
+}
+
+.memory-card button {
+  display: grid;
+  grid-template-rows: 112px 132px auto;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 8px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.memory-card .constellation-map {
+  display: block;
+  width: 100%;
+  height: 112px;
+}
+
+.memory-card .creature-portrait {
+  display: grid;
+  height: 132px;
+  min-height: 0;
+  margin: 0;
+  place-items: center;
+}
+
+.memory-card .creature-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.memory-card .creature-portrait p {
+  display: -webkit-box;
+  margin: 0;
+  padding: 8px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.memory-copy {
+  display: grid;
+  gap: 2px;
+  min-height: 38px;
+}
+
+.memory-copy b {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-copy small {
+  overflow: hidden;
+  color: var(--mist);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memory-detail {
+  margin: 0 0 8px;
+  padding: 12px 14px 8px;
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.04);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.memory-detail p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.memory-empty {
+  min-height: 280px;
+  padding-top: 12px;
+}
+
+h1.brand-lockup,
+p.brand-lockup {
+  display: inline-flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.social-topbar h1.brand-lockup {
+  justify-content: center;
+  justify-self: center;
+}
+
+h1.brand-lockup img,
+p.brand-lockup img {
+  display: block;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 10px;
+  object-fit: cover;
+}

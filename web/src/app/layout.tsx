@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   title: "Yonder",
   description:
     "A little of tonight, kept forever. Capture your sky, discover what is in it, and keep your nights in Memories.",
+  icons: { icon: "/yonder-logo.jpg", apple: "/yonder-logo.jpg" },
 };
 
 export const viewport: Viewport = {

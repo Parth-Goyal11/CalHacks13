@@ -589,7 +589,10 @@ function HomeScreen({
           <SkyIcon name="location" size={15} />
           <span>{place.name}</span>
         </button>
-        <h1 id="home-title">Yonder</h1>
+        <h1 id="home-title" className="brand-lockup">
+          <img src="/yonder-logo.jpg" alt="" width={36} height={36} />
+          Yonder
+        </h1>
         <button
           type="button"
           className="notification-button"
@@ -925,7 +928,10 @@ function ProfileScreen({
       aria-labelledby="profile-title"
     >
       <header className="profile-header">
-        <p className="wordmark">Yonder</p>
+        <p className="wordmark brand-lockup">
+          <img src="/yonder-logo.jpg" alt="" width={36} height={36} />
+          Yonder
+        </p>
         <button type="button" aria-label="Edit profile" onClick={onEdit}>
           <span />
           <span />

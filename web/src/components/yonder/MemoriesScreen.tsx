@@ -19,73 +19,17 @@ export default function MemoriesScreen({
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [perksOpen, setPerksOpen] = useState(false);
+  const openCreature = creatures.find((creature) => creature.id === openId) ?? null;
+  const openTracks = openCreature
+    ? openCreature.tracks?.length
+      ? openCreature.tracks
+      : qualityTracks(openCreature)
+    : [];
   return (
     <section
       className="screen scroll-screen my-sky"
       aria-labelledby="sky-title"
     >
-      <section className="creature-collection" aria-label="Creature collection">
-        <div className="collection-heading">
-          <h2>Creatures</h2>
-          <button type="button" onClick={() => setPerksOpen((open) => !open)}>
-            {perksOpen ? "Hide tiers" : "Tier perks"}
-          </button>
-        </div>
-        {perksOpen ? (
-          <ul className="tier-list">
-            {[...COLLECTION_TIERS].reverse().map((tier) => (
-              <li key={tier} className={`tier-${tier.toLowerCase()}`}>
-                <strong>{tier}</strong> {TIER_PERKS[tier].perk}
-                <span>{TIER_PERKS[tier].detail}</span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-        {creatures.length ? (
-          <ul className="creature-row">
-            {creatures.map((creature) => {
-              const tracks = creature.tracks?.length ? creature.tracks : qualityTracks(creature);
-              const open = openId === creature.id;
-              return (
-                <li key={creature.id} className={`creature-card caught-pair tier-${creature.tier.toLowerCase()}`}>
-                  <ConstellationMap
-                    name={creature.name}
-                    tier={creature.tier}
-                    progress={1}
-                    accent={creature.accent}
-                  />
-                  <div>
-                    <button
-                      type="button"
-                      className={open ? "is-open" : ""}
-                      onClick={() => setOpenId((current) => (current === creature.id ? null : creature.id))}
-                    >
-                      <span className="collection-copy">
-                        <b>
-                          Tier {creature.tier} · {creature.name}
-                        </b>
-                        <small>{open ? "Hide what was kept" : creature.perk}</small>
-                      </span>
-                    </button>
-                    <CreaturePortrait creature={creature} />
-                    {open ? (
-                      <ul className="quality-tracks">
-                        {tracks.map((track) => (
-                          <li key={track.key}>
-                            <span>{track.label}</span> {track.value}
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="collection-empty">Catch a constellation and its creature forms here, beside its star map.</p>
-        )}
-      </section>
       <header className="page-header gallery-header">
         <div>
           <p className="eyebrow">Your sky archive</p>
@@ -96,6 +40,75 @@ export default function MemoriesScreen({
           <small>skies</small>
         </span>
       </header>
+
+      <section className="memory-collection" aria-label="Creature collection">
+        <div className="memory-intro">
+          <p>
+            {creatures.length
+              ? `${creatures.length} ${creatures.length === 1 ? "creature" : "creatures"}, each beside its star map.`
+              : "Catch a constellation and its creature forms here."}
+          </p>
+          <button type="button" onClick={() => setPerksOpen((open) => !open)}>
+            {perksOpen ? "Hide tiers" : "Tier perks"}
+          </button>
+        </div>
+        {perksOpen ? (
+          <ul className="tier-rail">
+            {[...COLLECTION_TIERS].reverse().map((tier) => (
+              <li key={tier} className={`tier-${tier.toLowerCase()}`}>
+                <strong>
+                  {tier} · {TIER_PERKS[tier].perk}
+                </strong>
+                <span>{TIER_PERKS[tier].detail}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {creatures.length ? (
+          <ul className="memory-rail">
+            {creatures.map((creature) => {
+              const open = openId === creature.id;
+              return (
+                <li key={creature.id} className={`memory-card tier-${creature.tier.toLowerCase()}`}>
+                  <button
+                    type="button"
+                    aria-pressed={open}
+                    onClick={() => setOpenId((current) => (current === creature.id ? null : creature.id))}
+                  >
+                    <ConstellationMap
+                      name={creature.name}
+                      tier={creature.tier}
+                      progress={1}
+                      accent={creature.accent}
+                    />
+                    <CreaturePortrait creature={creature} />
+                    <span className="memory-copy">
+                      <b>{creature.name}</b>
+                      <small>
+                        Tier {creature.tier} · {creature.perk}
+                      </small>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+        {openCreature ? (
+          <div className="memory-detail">
+            <p>
+              {openCreature.name} · Tier {openCreature.tier}
+            </p>
+            <ul className="quality-tracks">
+              {openTracks.map((track) => (
+                <li key={track.key}>
+                  <span>{track.label}</span> {track.value}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
 
       {savedPhotos.length ? (
         <>
@@ -130,7 +143,7 @@ export default function MemoriesScreen({
           </div>
         </>
       ) : (
-        <div className="empty-state">
+        <div className="empty-state memory-empty">
           <span>
             <SkyIcon name="gallery" size={30} />
           </span>

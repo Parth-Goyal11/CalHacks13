@@ -25,10 +25,16 @@ async function fetchNearbyEvents(
     lon: String(place.longitude),
     label: place.name,
   });
-  const res = await fetch(`/api/celestial-events?${params}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error ?? "Failed to load events");
-  return (data.events as RankedCelestialEvent[]).slice(0, 24);
+  const res = await fetch(`/api/celestial-events?${params}`, { cache: "no-store" });
+  const text = await res.text();
+  let data: { events?: RankedCelestialEvent[] } = {};
+  try {
+    data = text.trim() ? (JSON.parse(text) as { events?: RankedCelestialEvent[] }) : {};
+  } catch {
+    data = {};
+  }
+  if (!res.ok || !data.events) throw new Error("Sky events are unavailable.");
+  return data.events.slice(0, 24);
 }
 
 function compassLabel(deg: number) {
@@ -124,11 +130,9 @@ export default function SkyFinder({
           const iss = next.find((e) => e.kind === "iss_pass" && e.inRange);
           if (iss) setHintEventId(iss.id);
         }
-      } catch (e) {
+      } catch {
         if (!cancelled) {
-          setEventsError(
-            e instanceof Error ? e.message : "Could not load sky events"
-          );
+          setEventsError("Sky events are unavailable.");
         }
       }
     }

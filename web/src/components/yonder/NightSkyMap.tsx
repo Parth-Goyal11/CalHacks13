@@ -97,6 +97,16 @@ function project(altitudeDeg: number, azimuthDeg: number, aim: Aim) {
   return { x, y };
 }
 
+async function readSkyChart(response: Response): Promise<(SkyChart & { error?: string }) | null> {
+  const text = await response.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as SkyChart & { error?: string };
+  } catch {
+    return null;
+  }
+}
+
 function formatHours(degrees: number) {
   const hours = ((degrees / 15) % 24 + 24) % 24;
   const whole = Math.floor(hours);
@@ -135,22 +145,29 @@ export default function NightSkyMap({
 
   useEffect(() => {
     const controller = new AbortController();
+    let active = true;
     setError("");
     const params = new URLSearchParams({
       lat: String(latitude),
       lon: String(longitude),
     });
-    fetch(`/api/night-sky?${params}`, { signal: controller.signal })
+    fetch(`/api/night-sky?${params}`, { signal: controller.signal, cache: "no-store" })
       .then(async (response) => {
-        const data = (await response.json()) as SkyChart & { error?: string };
-        if (!response.ok) throw new Error(data.error || "The night sky could not be placed.");
+        const data = await readSkyChart(response);
+        if (!active) return;
+        if (!response.ok || !data?.objects) {
+          throw new Error("The night sky could not be placed.");
+        }
         setChart(data);
       })
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setError(reason instanceof Error ? reason.message : "The night sky could not be placed.");
+      .catch(() => {
+        if (!active || controller.signal.aborted) return;
+        setError("The night sky could not be placed.");
       });
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [latitude, longitude]);
 
   useEffect(() => {
