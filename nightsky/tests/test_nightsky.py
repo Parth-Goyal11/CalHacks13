@@ -791,7 +791,7 @@ def test_viewer_page_and_file_guard():
         with urlopen(f"http://{host}:{port}/") as response:
             page = response.read().decode()
         assert "Night sky" in page
-        assert "Sky map" in page
+        assert "Orion demo" not in page
         assert "Hold the phone to the sky" in page
         assert "Show the sky behind the names" in page
         assert "phonePose" in page

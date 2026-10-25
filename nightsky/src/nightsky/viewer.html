@@ -45,7 +45,6 @@
       border-radius: 16px;
       padding: 14px;
     }
-    .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
     button, .file {
       border: 1px solid var(--line);
       background: #12161e;
@@ -180,10 +179,6 @@
   </header>
   <main>
     <section class="stage">
-      <div class="tabs">
-        <button id="tab-sky" class="active" type="button">Sky map</button>
-        <button id="tab-demo" type="button">Orion demo</button>
-      </div>
       <div id="live">
         <div id="viewport" class="viewport">
           <video id="camera" playsinline autoplay muted></video>
@@ -231,6 +226,7 @@
         <div class="switch">
           <button id="show-labeled" class="active" type="button">With labels</button>
           <button id="show-plain" type="button">Pixels only</button>
+          <button id="back-to-sky" type="button">Back to the sky</button>
         </div>
         <p id="status"></p>
       </figure>
@@ -387,28 +383,13 @@
       }
     }
 
-    async function loadDemo() {
-      setStatus("Loading the Orion solve…");
-      const response = await fetch("/api/demo");
-      const data = await response.json();
-      if (data.catalog) {
-        catalog.textContent = `${data.catalog.stars.toLocaleString()} Hipparcos stars and ${data.catalog.satellites.toLocaleString()} satellites are loaded.`;
-      }
-      render(data);
+    function showSky() {
+      document.querySelector("#still").hidden = true;
+      document.querySelector("#live").hidden = false;
+      drawChart();
     }
 
-    function selectTab(name) {
-      for (const id of ["sky", "demo"]) {
-        document.querySelector(`#tab-${id}`).classList.toggle("active", id === name);
-      }
-      document.querySelector("#live").hidden = name !== "sky";
-      document.querySelector("#still").hidden = name === "sky";
-      form.hidden = name === "demo";
-      if (name === "demo") loadDemo();
-      if (name === "sky") drawChart();
-    }
-    document.querySelector("#tab-sky").addEventListener("click", () => selectTab("sky"));
-    document.querySelector("#tab-demo").addEventListener("click", () => selectTab("demo"));
+    document.querySelector("#back-to-sky").addEventListener("click", showSky);
     form.addEventListener("submit", (event) => event.preventDefault());
     showLabeled.addEventListener("click", () => {
       labeled = true;
@@ -755,7 +736,7 @@
         skyStatus.textContent = `${polarisLine} ${visible.length} named objects are in this lens.${correction}${tracking}${loading}`;
       }
       const now = performance.now();
-      if (document.querySelector("#tab-sky").classList.contains("active") && now - listedAt > 400) {
+      if (!document.querySelector("#live").hidden && now - listedAt > 400) {
         listedAt = now;
         matches.replaceChildren();
         const table = document.createElement("table");
@@ -1216,7 +1197,7 @@
     }
 
     function tick() {
-      if (document.querySelector("#tab-sky").classList.contains("active")) drawChart();
+      if (!document.querySelector("#live").hidden) drawChart();
       requestAnimationFrame(tick);
     }
 
