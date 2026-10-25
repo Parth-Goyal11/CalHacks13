@@ -16,6 +16,7 @@ import CameraFlow from "./CameraFlow";
 import Discovery from "./Discovery";
 import SkyFinder from "./SkyFinder";
 import NightSkyMap from "./NightSkyMap";
+import { moodLabel, skyMood, SkyTone } from "./sky-tone";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import { IMG, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
@@ -120,6 +121,23 @@ export default function YonderApp({
   const [error, setError] = useState("");
   const objectUrls = useRef<string[]>([]);
   const sky = useSkyWeather();
+  const tone = useRef<SkyTone | null>(null);
+  const [toneOn, setToneOn] = useState(false);
+  const mood = useMemo(
+    () =>
+      skyMood({
+        cloudCover: sky.weather?.cloudCover ?? null,
+        isDay: sky.weather ? sky.weather.isDay : null,
+        creatures,
+      }),
+    [sky.weather, creatures],
+  );
+
+  useEffect(() => {
+    if (toneOn) tone.current?.setMood(mood);
+  }, [mood, toneOn]);
+
+  useEffect(() => () => tone.current?.dispose(), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -451,6 +469,23 @@ export default function YonderApp({
               </section>
             )}
           </div>
+          <button
+            type="button"
+            className={toneOn ? "sky-tone is-on" : "sky-tone"}
+            aria-pressed={toneOn}
+            onClick={() => {
+              if (!tone.current) tone.current = new SkyTone();
+              if (toneOn) {
+                tone.current.stop();
+                setToneOn(false);
+                return;
+              }
+              void tone.current.start(mood).then(() => setToneOn(true));
+            }}
+          >
+            <span>{toneOn ? "Playing" : "Sky tone"}</span>
+            <small>{moodLabel(mood)}</small>
+          </button>
           <BottomNav
             active={activeTab === "events" ? "explore" : activeTab}
             onChange={navigate}

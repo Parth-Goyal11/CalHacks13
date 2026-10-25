@@ -650,6 +650,42 @@ p.brand-lockup img {
   object-fit: cover;
 }
 
+.sky-tone {
+  position: absolute;
+  z-index: 6;
+  right: 14px;
+  bottom: calc(var(--nav-height) + 128px);
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 16px;
+  background: rgb(12 15 24 / 0.88);
+  box-shadow: inset 0 0 0 1px var(--line);
+  color: var(--ivory);
+  text-align: left;
+}
+
+.sky-tone span {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sky-tone small {
+  color: var(--mist);
+  font-size: 11px;
+}
+
+.sky-tone.is-on {
+  box-shadow: inset 0 0 0 1px rgba(217, 199, 157, 0.6);
+}
+
+.sky-tone.is-on span,
+.sky-tone.is-on small {
+  color: var(--champagne);
+}
+
 .my-sky .gallery-intro {
   align-items: center;
   padding: 2px 16px 12px;
