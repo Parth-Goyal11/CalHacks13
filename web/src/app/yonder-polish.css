@@ -2094,6 +2094,9 @@ summary:focus-visible {
 .feed-highlight { position: absolute; z-index: 2; display: flex; align-items: center; gap: 6px; transform: translate(-8px, -8px); pointer-events: none; }
 .feed-highlight > i { width: 16px; height: 16px; border: 1px solid #dfcba6; border-radius: 50%; box-shadow: 0 0 8px rgba(223,203,166,.3); }
 .feed-highlight > span { max-width: 110px; padding: 4px 6px; border-radius: 5px; background: rgba(5,7,17,.8); color: #f4f0e9; font-size: 10px; text-align: left; }
+.feed-highlight.label-left { flex-direction: row-reverse; transform: translate(calc(-100% + 8px), -8px); }
+.sky-marker.label-left .marker-label { left: auto; right: 35px; top: 12px; translate: 0 0; }
+.curated-discovery .marker-label { opacity: 1; }
 .profile-photo > img { object-fit: cover; object-position: 28% 40%; }
 .streak-card .eyebrow, .streak-card strong, .streak-orbit span { color: #e6c56d; }
 .streak-card > div > span { color: #a5d8f5; }

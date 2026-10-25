@@ -11,11 +11,13 @@ import {
   type FormEvent,
 } from "react";
 import BottomNav from "./Navigation";
+import FeedActions from "./FeedActions";
 import MemoriesScreen from "./MemoriesScreen";
 import CameraFlow from "./CameraFlow";
 import Discovery from "./Discovery";
 import SkyFinder from "./SkyFinder";
 import NightSkyMap from "./NightSkyMap";
+import capturePrompt from "./HomeCapturePrompt.module.css";
 import { IconButton, SkyIcon } from "./SkyIcon";
 import { IMG, demoSkies, friendPosts, type SkyPhoto, type Tab } from "./sky-data";
 import { identificationLabel, type SkyPhotoResult } from "./analysis";
@@ -48,6 +50,7 @@ type LocalProfile = {
   school: string;
   sign: string;
 };
+const HOME_PHOTO_KEY = "yonder-todays-capture";
 const defaultProfile: LocalProfile = {
   name: "Jason Liu",
   handle: "jasonliu",
@@ -128,8 +131,7 @@ export default function YonderApp({
       try {
         const memories = await readMemories();
         if (cancelled) return;
-        setSavedPhotos(
-          memories.map((memory) => {
+        const hydratedPhotos = memories.map((memory) => {
             const image = URL.createObjectURL(memory.image);
             urls.push(image);
             return {
@@ -139,8 +141,15 @@ export default function YonderApp({
               date: dateLabel(memory.createdAt),
               objects: objectsFor(memory.result),
             };
-          }),
-        );
+          });
+        setSavedPhotos(hydratedPhotos);
+        // Older memories never become a new "tonight" post automatically.
+        try {
+          const homeId = localStorage.getItem(HOME_PHOTO_KEY);
+          const today = hydratedPhotos.find((photo) => photo.id === homeId &&
+            new Date(photo.createdAt).toDateString() === new Date().toDateString());
+          if (today) setLatestPhoto(today);
+        } catch { /* The current session still works without localStorage. */ }
         const collection = await readCreatures();
         if (!cancelled) setCreatures(collection);
       } catch {
@@ -287,6 +296,7 @@ export default function YonderApp({
           ...current.filter((item) => item.id !== photo.id),
         ]);
         setLatestPhoto(photo);
+        try { localStorage.setItem(HOME_PHOTO_KEY, photo.id); } catch { /* Keep the captured sky in memory. */ }
       })
       .catch(() => {
         setError(
@@ -334,6 +344,10 @@ export default function YonderApp({
         setSavedPhotos((current) =>
           current.filter((item) => item.id !== photo.id),
         );
+        if (latestPhoto?.id === photo.id) {
+          setLatestPhoto(null);
+          try { localStorage.removeItem(HOME_PHOTO_KEY); } catch { /* Storage may be disabled. */ }
+        }
       } else {
         const memory = record(photo);
         if (memory) await writeMemory(memory);
@@ -351,7 +365,7 @@ export default function YonderApp({
     }
   }
   async function saveNote(note: string) {
-    const latest = latestPhoto ?? savedPhotos.find((photo) => photo.result);
+    const latest = latestPhoto;
     if (!latest) return;
     const next = { ...latest, note };
     try {
@@ -369,8 +383,7 @@ export default function YonderApp({
     }
   }
 
-  const personalSky =
-    latestPhoto ?? savedPhotos.find((photo) => photo.result) ?? null;
+  const personalSky = latestPhoto;
   const eventsPlace = useMemo(
     () => ({
       id: String(sky.place.id),
@@ -574,7 +587,6 @@ function HomeScreen({
   onUpload: () => void;
   onNote: () => void;
 }) {
-  const [liked, setLiked] = useState<string[]>([]);
   const posts = friendPosts;
   return (
     <section
@@ -618,33 +630,32 @@ function HomeScreen({
           </div>
           <span className="sky-condition">{conditionLabel(weather)}</span>
         </div>
-        <button
-          type="button"
-          className="main-sky-photo"
-          onClick={() => (photo ? onOpen(photo) : onCapture())}
-        >
-          <img
-            src={photo?.image ?? IMG.home}
-            alt={
-              photo
-                ? "Your sky photograph"
-                : "Star-filled sky, capture your own"
-            }
-          />
-          <span className="sky-object-tag">
-            <SkyIcon name={photo ? "spark" : "camera"} size={15} />
-            {photo ? identificationLabel(photo.result) : "Capture your sky"}
-          </span>
-        </button>
-        <button
-          type="button"
-          className="add-caption"
-          onClick={() => (photo ? onNote() : onCapture())}
-        >
-          {photo
-            ? photo.note || "Add a note about your sky…"
-            : "A little of tonight, kept forever."}
-        </button>
+        {photo ? (
+          <>
+            <button
+              type="button"
+              className="main-sky-photo"
+              onClick={() => onOpen(photo)}
+            >
+              <img src={photo.image} alt="Your sky photograph" />
+              <span className="sky-object-tag">
+                <SkyIcon name="spark" size={15} />
+                {identificationLabel(photo.result)}
+              </span>
+            </button>
+            <button type="button" className="add-caption" onClick={onNote}>
+              {photo.note || "Add a note about your sky…"}
+            </button>
+          </>
+        ) : (
+          <button type="button" className={capturePrompt.prompt} onClick={onCapture}>
+            <span className={capturePrompt.icon} aria-hidden="true">
+              <SkyIcon name="camera" size={24} />
+            </span>
+            <strong>Capture today’s sky</strong>
+            <span>Take a photo to discover what’s above you.</span>
+          </button>
+        )}
         <button type="button" className="upload-photo" onClick={onUpload}>
           <SkyIcon name="gallery" size={15} />
           Upload a photo
@@ -685,36 +696,17 @@ function HomeScreen({
                     loading="lazy"
                   />
                   {sample.objects.map((object) => (
-                    <span key={object.id} className="feed-highlight" style={{ left: `${object.x}%`, top: `${object.y}%` }} aria-hidden="true">
+                    <span key={object.id} className={`feed-highlight ${object.labelSide === "left" ? "label-left" : ""}`} style={{ left: `${object.x}%`, top: `${object.y}%` }} aria-hidden="true">
                       <i /> <span>{object.name}</span>
                     </span>
                   ))}
                   <span className="feed-photo-shade" />
                   <span className="feed-object">
                     <SkyIcon name="spark" size={15} />
-                    {sample.objects[0]?.name}
+                    {sample.objects.length} stars{sample.annotationStatus === "preview" ? " · Demo preview" : " highlighted"}
                   </span>
                 </button>
-                <div className="post-footer">
-                  <button
-                    type="button"
-                    aria-pressed={liked.includes(post.name)}
-                    onClick={() =>
-                      setLiked((current) =>
-                        current.includes(post.name)
-                          ? current.filter((name) => name !== post.name)
-                          : [...current, post.name],
-                      )
-                    }
-                  >
-                    {liked.includes(post.name)
-                      ? "Appreciated"
-                      : "Appreciate this sky"}
-                  </button>
-                  <button type="button" onClick={() => onOpen(sample)}>
-                    View sky
-                  </button>
-                </div>
+                <FeedActions postId={sample.id} author={post.name} profileName={profile.name} />
               </article>
             );
           })}

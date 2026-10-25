@@ -96,7 +96,7 @@ export default function Discovery({
   return (
     <dialog
       ref={dialog}
-      className={`discovery overlay-dialog ${real || photo.curated ? "real-discovery" : ""} ${result?.reveal ? "figma-discovery has-diagrams" : ""}`}
+      className={`discovery overlay-dialog ${real || photo.curated ? "real-discovery" : ""} ${photo.curated ? "curated-discovery" : ""} ${result?.reveal ? "figma-discovery has-diagrams" : ""}`}
       aria-label={`Discover ${photo.title}`}
       onCancel={(event) => {
         event.preventDefault();
@@ -138,7 +138,7 @@ export default function Discovery({
         <div>
           <p>{real ? "Your sky" : photo.curated ? "Sky highlights" : "Sample sky"}</p>
           <span>
-            {result?.reveal ? <><i /> {photo.objects.length} objects found</> : real ? identificationLabel(result) : photo.curated ? "Photo highlights" : "Illustrative markers"}
+            {result?.reveal ? <><i /> {photo.objects.length} objects found</> : real ? identificationLabel(result) : photo.curated ? photo.annotationStatus === "catalog" ? "Catalog matched" : "Demo preview" : "Illustrative markers"}
           </span>
         </div>
         <button
@@ -204,7 +204,7 @@ export default function Discovery({
                 key={object.id}
                 aria-label={`Learn about ${object.name}`}
                 aria-pressed={selected?.id === object.id}
-                className={`sky-marker ${object.tone ?? ""} ${object.highlightRank ? "is-highlighted" : ""} ${selected?.id === object.id ? "selected" : ""}`}
+                className={`sky-marker ${object.tone ?? ""} ${object.labelSide === "left" ? "label-left" : ""} ${object.highlightRank ? "is-highlighted" : ""} ${selected?.id === object.id ? "selected" : ""}`}
                 style={{ left: `${object.x}%`, top: `${object.y}%` }}
                 onClick={() => selectObject(object)}
               >
@@ -385,8 +385,8 @@ export default function Discovery({
               </div>
             </div>
           ) : null}
-          <details className="analysis-details">
-            <summary>About this pattern</summary>
+          <details className="analysis-details" open={photo.curated || undefined}>
+            <summary>{selected.kind.startsWith("Star ·") ? "About this star" : "About this pattern"}</summary>
             <p className="object-detail">{selected.detail}</p>
             {selected.highlightReason && <p className="highlight-reason">{selected.highlightReason}</p>}
           </details>
@@ -394,10 +394,12 @@ export default function Discovery({
           <div className="sheet-footer">
             <span>
               <SkyIcon name="spark" size={17} />
-              {real ? "In your analysis" : "Sample discovery"}
+              {real ? "In your analysis" : photo.curated ? photo.annotationStatus === "catalog" ? "Catalog matched" : "Demo preview" : "Sample discovery"}
             </span>
-            <button type="button" disabled={saving} onClick={onSave}>
-              {saving
+            <button type="button" disabled={saving || photo.curated} onClick={onSave}>
+              {photo.curated
+                ? "In Memories"
+                : saving
                 ? "Saving…"
                 : saved
                   ? "Remove from Memories"

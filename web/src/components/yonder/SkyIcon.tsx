@@ -18,6 +18,10 @@ export function SkyIcon({
     strokeLinejoin: "round" as const,
     "aria-hidden": true,
   };
+  if (name === "heart")
+    return <svg {...common}><path d="M20.3 5.7a5 5 0 0 0-7.1 0L12 6.9l-1.2-1.2a5 5 0 0 0-7.1 7.1L12 21l8.3-8.2a5 5 0 0 0 0-7.1Z" /></svg>;
+  if (name === "comment")
+    return <svg {...common}><path d="M20 11.5a8 8 0 0 1-8 8 9 9 0 0 1-3.5-.7L4 20l1.2-4.5a8 8 0 1 1 14.8-4Z" /></svg>;
   if (name === "home")
     return (
       <svg {...common}>
