@@ -446,8 +446,9 @@ def test_viewer_page_and_file_guard():
             page = response.read().decode()
         assert "Night sky" in page
         assert "Sky map" in page
-        assert "Follow the phone" in page
-        assert "Upload a photo" in page
+        assert "Turn with the phone" in page
+        assert "Show the sky behind the names" in page
+        assert "Upload a photo" not in page
         assert "north of the equator" in page
         assert "east of Greenwich" in page
         assert 'step="1"' not in page

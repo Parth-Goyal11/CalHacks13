@@ -64,7 +64,8 @@
       background: #05070c;
       display: block;
     }
-    .switch { display: flex; gap: 8px; margin-top: 10px; }
+    .switch { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+    .phone { display: grid; gap: 8px; margin-top: 14px; }
     #status { min-height: 1.4em; color: var(--muted); }
     #status.error { color: var(--danger); }
     form { display: grid; gap: 10px; margin-bottom: 16px; }
@@ -109,7 +110,7 @@
     .aim { display: grid; gap: 8px; margin-top: 12px; }
     .aim label { font-size: 14px; }
     input[type="range"] { padding: 0; accent-color: var(--amber); }
-    #live[hidden], #still[hidden], #upload-tools[hidden] { display: none; }
+    #live[hidden], #still[hidden] { display: none; }
     @media (max-width: 800px) {
       main { grid-template-columns: 1fr; }
       h1 { font-size: 32px; }
@@ -121,7 +122,7 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">Point the phone and the catalog is drawn on the sky from where you are, what time it is, and which way the lens faces. Polaris is true north. Its height above the horizon is your latitude. A photo can snap those labels onto real stars when the pattern is clear.</p>
+    <p class="lede">The map is the catalog drawn for where you are and what time it is. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, the compass can turn the map for you and the camera can show the real sky behind the names.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
@@ -129,19 +130,14 @@
       <div class="tabs">
         <button id="tab-sky" class="active" type="button">Sky map</button>
         <button id="tab-demo" type="button">Orion demo</button>
-        <button id="tab-upload" type="button">Upload a photo</button>
       </div>
       <div id="live">
         <div id="viewport" class="viewport">
           <video id="camera" playsinline autoplay muted></video>
           <canvas id="chart"></canvas>
         </div>
-        <div class="switch">
-          <button id="follow" type="button">Follow the phone</button>
-          <button id="open-camera" type="button">Open the camera</button>
-          <button id="hold" class="primary" type="button">Hold this view</button>
-        </div>
         <p id="sky-status" class="note"></p>
+        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead.</p>
         <div class="aim">
           <label>Heading from true north, degrees clockwise
             <input id="heading" type="range" min="0" max="360" value="0">
@@ -156,6 +152,13 @@
             <input id="fov" type="range" min="35" max="100" value="68">
           </label>
         </div>
+        <div class="phone">
+          <p class="note">On a phone only. A laptop has no compass, and its camera is not pointed at the sky, so the sliders are how you look around here.</p>
+          <button id="follow" type="button">Turn with the phone</button>
+          <p class="hint">The map follows the compass and how far you tip the phone. The browser asks to use motion sensors. Tap again to go back to the sliders.</p>
+          <button id="open-camera" type="button">Show the sky behind the names</button>
+          <p class="hint">Turns on the rear camera and leaves the names drawn on top of it. The browser asks to use the camera. Tap again to hide it.</p>
+        </div>
       </div>
       <figure id="still" hidden>
         <img id="sky" alt="Night-sky field">
@@ -168,11 +171,6 @@
     </section>
     <aside>
       <form id="upload">
-        <div id="upload-tools" hidden>
-          <label>Photo
-            <input id="photo" name="photo" type="file" accept="image/*">
-          </label>
-        </div>
         <label>Time, UTC, to the minute
           <input id="taken_at" name="taken_at" type="datetime-local">
         </label>
@@ -185,10 +183,6 @@
             <input id="longitude" name="longitude" inputmode="decimal" placeholder="-122.4194">
             <span class="hint">Decimal degrees from −180 to 180. Positive is east of Greenwich, negative is west. San Francisco is −122.42.</span>
           </label>
-        </div>
-        <div id="upload-tools-note" hidden>
-          <p class="note">Choosing a photo from the camera roll fills the time and the GPS fix when the file has them. This browser can also fill latitude and longitude from the device location. A camera clock has no time zone, so that time is read as UTC. Each star-like point is named on its own. The picture is darkened so those points stand out from the sky.</p>
-          <button id="solve" class="primary" type="submit">Solve this photo</button>
         </div>
       </form>
       <div id="solution"></div>
@@ -332,47 +326,18 @@
     }
 
     function selectTab(name) {
-      for (const id of ["sky", "demo", "upload"]) {
+      for (const id of ["sky", "demo"]) {
         document.querySelector(`#tab-${id}`).classList.toggle("active", id === name);
       }
       document.querySelector("#live").hidden = name !== "sky";
       document.querySelector("#still").hidden = name === "sky";
       form.hidden = name === "demo";
-      document.querySelector("#upload-tools").hidden = name !== "upload";
-      document.querySelector("#upload-tools-note").hidden = name !== "upload";
       if (name === "demo") loadDemo();
-      if (name === "upload") {
-        setStatus("Choose a photo. The Orion result stays up until you solve.");
-        fillDeviceLocation();
-      }
       if (name === "sky") drawChart();
     }
     document.querySelector("#tab-sky").addEventListener("click", () => selectTab("sky"));
     document.querySelector("#tab-demo").addEventListener("click", () => selectTab("demo"));
-    document.querySelector("#tab-upload").addEventListener("click", () => selectTab("upload"));
-    document.querySelector("#photo").addEventListener("change", async () => {
-      const file = document.querySelector("#photo").files[0];
-      if (!file) return;
-      const body = new FormData();
-      body.append("photo", file);
-      try {
-        const hints = await fetch("/api/hints", { method: "POST", body }).then((response) => response.json());
-        if (hints.taken_at) document.querySelector("#taken_at").value = hints.taken_at.slice(0, 16);
-        if (hints.latitude != null) document.querySelector("#latitude").value = Number(hints.latitude).toFixed(5);
-        if (hints.longitude != null) document.querySelector("#longitude").value = Number(hints.longitude).toFixed(5);
-      } catch (error) {
-        setStatus("The photo's time and location could not be read.", true);
-      }
-    });
-    function fillDeviceLocation() {
-      if (!navigator.geolocation) return;
-      navigator.geolocation.getCurrentPosition((position) => {
-        const latitude = document.querySelector("#latitude");
-        const longitude = document.querySelector("#longitude");
-        if (!latitude.value) latitude.value = position.coords.latitude.toFixed(5);
-        if (!longitude.value) longitude.value = position.coords.longitude.toFixed(5);
-      });
-    }
+    form.addEventListener("submit", (event) => event.preventDefault());
     showLabeled.addEventListener("click", () => {
       labeled = true;
       showLabeled.classList.add("active");
@@ -384,35 +349,6 @@
       showPlain.classList.add("active");
       showLabeled.classList.remove("active");
       showImage();
-    });
-    form.addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const file = document.querySelector("#photo").files[0];
-      if (!file) {
-        setStatus("Choose a photo first.", true);
-        return;
-      }
-      const button = document.querySelector("#solve");
-      button.disabled = true;
-      setStatus("Solving and checking planets and satellites…");
-      const body = new FormData(form);
-      try {
-        const response = await fetch("/api/uploads", { method: "POST", body });
-        const data = await response.json();
-        if (!response.ok && !data.labeled_url) {
-          setStatus(data.error || "The upload failed.", true);
-          return;
-        }
-        if (data.catalog === undefined) {
-          const demo = await fetch("/api/demo").then((item) => item.json());
-          if (demo.catalog) data.catalog = demo.catalog;
-        }
-        render(data);
-      } catch (error) {
-        setStatus("The viewer could not reach the solver.", true);
-      } finally {
-        button.disabled = false;
-      }
     });
     function pad(number) {
       return String(number).padStart(2, "0");
@@ -659,12 +595,13 @@
         followPhone = false;
         sensorNote = "";
         document.querySelector("#follow").classList.remove("primary");
+        document.querySelector("#follow").textContent = "Turn with the phone";
         skyStatus.textContent = "The sliders are steering the map.";
         return;
       }
       const orientation = window.DeviceOrientationEvent;
       if (!orientation) {
-        skyStatus.textContent = "This browser has no compass. Drag the heading and the lens height.";
+        skyStatus.textContent = "This browser has no compass. Drag the heading and the lens height. That button is for a phone.";
         return;
       }
       if (typeof orientation.requestPermission === "function") {
@@ -678,8 +615,9 @@
       window.addEventListener("deviceorientation", onOrient, true);
       followPhone = true;
       userAimed = true;
-      sensorNote = " Hold the phone upright. The map follows the compass and the tilt.";
+      sensorNote = " Hold the phone upright. Turning and tipping it moves the map.";
       document.querySelector("#follow").classList.add("primary");
+      document.querySelector("#follow").textContent = "Stop turning with the phone";
     });
 
     document.querySelector("#open-camera").addEventListener("click", async () => {
@@ -688,64 +626,23 @@
         video.srcObject = null;
         cameraOn = false;
         document.querySelector("#open-camera").classList.remove("primary");
+        document.querySelector("#open-camera").textContent = "Show the sky behind the names";
         return;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        skyStatus.textContent = "This browser has no camera. The map still shows the catalog.";
+        skyStatus.textContent = "This browser has no camera. The map still shows the names. That button is for a phone.";
         return;
       }
       try {
         video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         cameraOn = true;
         document.querySelector("#open-camera").classList.add("primary");
+        document.querySelector("#open-camera").textContent = "Hide the camera";
         video.onloadedmetadata = () => {
           if (video.videoWidth) document.querySelector("#viewport").style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
         };
       } catch (error) {
-        skyStatus.textContent = "The camera stayed closed. The map still shows the catalog.";
-      }
-    });
-
-    document.querySelector("#hold").addEventListener("click", async () => {
-      const place = placeTime();
-      if (!place) {
-        skyStatus.textContent = "Add a latitude and longitude before holding the view.";
-        return;
-      }
-      if (!cameraOn || !video.videoWidth) {
-        userAimed = true;
-        drawChart();
-        skyStatus.textContent = `${skyStatus.textContent} Open the camera to lay this map on a photo.`;
-        return;
-      }
-      const shot = document.createElement("canvas");
-      shot.width = video.videoWidth;
-      shot.height = video.videoHeight;
-      shot.getContext("2d").drawImage(video, 0, 0);
-      const blob = await new Promise((resolve) => shot.toBlob(resolve, "image/jpeg", 0.92));
-      const body = new FormData();
-      body.append("photo", blob, "sky.jpg");
-      body.append("taken_at", place.taken_at);
-      body.append("latitude", String(place.latitude));
-      body.append("longitude", String(place.longitude));
-      const aim = aimNow();
-      body.append("azimuth", String(aim.azimuth));
-      body.append("altitude", String(aim.altitude));
-      body.append("roll", String(aim.roll));
-      body.append("fov", String(aim.fov));
-      document.querySelector("#hold").disabled = true;
-      skyStatus.textContent = "Laying the catalog on this photo…";
-      try {
-        const response = await fetch("/api/uploads", { method: "POST", body });
-        const data = await response.json();
-        selectTab("upload");
-        document.querySelector("#still").hidden = false;
-        document.querySelector("#live").hidden = true;
-        render(data);
-      } catch (error) {
-        skyStatus.textContent = "The photo could not be labeled.";
-      } finally {
-        document.querySelector("#hold").disabled = false;
+        skyStatus.textContent = "The camera stayed closed. The names are still on the map.";
       }
     });
 
@@ -754,7 +651,9 @@
         if (applying) return;
         userAimed = true;
         followPhone = false;
+        sensorNote = "";
         document.querySelector("#follow").classList.remove("primary");
+        document.querySelector("#follow").textContent = "Turn with the phone";
         drawChart();
       });
     }

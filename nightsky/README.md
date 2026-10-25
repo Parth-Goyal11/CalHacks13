@@ -51,9 +51,9 @@ Satellite elements refresh when the cached CSV is older than three days. A reloa
 python -m nightsky serve
 ```
 
-Open [http://127.0.0.1:8741](http://127.0.0.1:8741). The sky map draws Hipparcos, the bright planets, the Moon, and visible satellites from your latitude, longitude, and the time. Polaris is true north, and its height above the horizon is your latitude. Drag the heading and lens height, or tap Follow the phone so the compass and tilt steer the map. Hold this view with the camera open to lay those labels on a photo. If the star pattern in that patch of sky is clear, the names snap onto the real dots. If it is not, the labels stay predictions from the aim and nothing is invented.
+Open [http://127.0.0.1:8741](http://127.0.0.1:8741). The sky map draws Hipparcos, the bright planets, the Moon, and visible satellites from your latitude, longitude, and the time. Polaris is true north, and its height above the horizon is your latitude. Drag the heading and lens height to look around. On a phone, Turn with the phone follows the compass and tilt, and Show the sky behind the names puts the rear camera under the labels. A laptop has no compass, so the sliders are the control there.
 
-The Orion demo is the labeled field already solved from the catalog. Upload a JPEG or PNG to run the plate solver on that file without an aim. Time is taken to the minute. Latitude and longitude are decimal degrees, north and east positive. The camera roll's timestamp and GPS fill those fields when the file has them, and the browser can fill the device location. Each detected star is named on its own. The label is the proper name, or the Hipparcos number when the catalog has no proper name. The on-screen photo is darkened so the stars stand out from the sky.
+The Orion demo is the labeled field already solved from the catalog. Time is taken to the minute. Latitude and longitude are decimal degrees, north and east positive. The browser can fill the device location. A star with no common name is marked with its Hipparcos number.
 
 The solver matches the pattern of stars in the photo to Hipparcos. A field with no very bright triangle is tried again against stars down to magnitude 5, and a name is kept only when the guesses agree on one sky. A daylight photo, or a pattern that fits several skies equally well, stays unsolved and nothing is invented.
 
