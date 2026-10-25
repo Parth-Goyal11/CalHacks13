@@ -126,12 +126,18 @@
     }
     #detail[hidden] { display: none; }
     #detail h2 {
-      margin: 0 0 8px;
+      margin: 0 0 4px;
       font-family: Palatino, "Iowan Old Style", Georgia, serif;
       font-size: 22px;
       font-weight: 500;
     }
-    #detail dl { grid-template-columns: 8.2rem 1fr; margin: 0; font-size: 14px; }
+    #detail-summary {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+    #detail dl { grid-template-columns: 8.4rem 1fr; margin: 0; font-size: 14px; }
     #detail-close {
       position: absolute;
       top: 8px;
@@ -170,11 +176,12 @@
           <aside id="detail" hidden>
             <button id="detail-close" type="button">Close</button>
             <h2 id="detail-name"></h2>
+            <p id="detail-summary"></p>
             <dl id="detail-facts"></dl>
           </aside>
         </div>
         <p id="sky-status" class="note"></p>
-        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. Dots mark named stars, planets, the Moon, and satellites. Click a name for its catalog entry. A star with only a Hipparcos number is left off the map. The photograph is Axel Mellinger’s all-sky mosaic of the Milky Way. Hubble and JWST frames cover only a few arcminutes, so they cannot fill this view.</p>
+        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. Dots mark named stars, planets, the Moon, and satellites. Click a name for the catalog entry: magnitude, spectral type, distance, and where it is right now. A star with only a Hipparcos number is left off the map. The background is Axel Mellinger’s Milky Way, graded into a deep planetarium field. Hubble and JWST frames cover only a few arcminutes, so they cannot fill this view.</p>
         <div class="aim">
           <label>Heading from true north, degrees clockwise
             <input id="heading" type="range" min="0" max="360" value="0">
@@ -580,22 +587,61 @@
       return row.object_type;
     }
 
+    function formatHours(degrees) {
+      const hours = ((degrees % 360) + 360) % 360 / 15;
+      const whole = Math.floor(hours);
+      const minutes = Math.floor((hours - whole) * 60);
+      return `${whole}h ${String(minutes).padStart(2, "0")}m`;
+    }
+
+    function formatDistance(lightYears) {
+      if (lightYears == null) return null;
+      return lightYears < 20 ? `${fmt(lightYears, 1)} light-years` : `${fmt(lightYears, 0)} light-years`;
+    }
+
+    function formatMotion(row) {
+      if (row.pm_ra == null || row.pm_dec == null) return null;
+      return `${fmt(row.pm_ra, 1)}, ${fmt(row.pm_dec, 1)} mas/year`;
+    }
+
+    function detailSummary(row) {
+      if (row.object_type === "star") {
+        const parts = [`Magnitude ${fmt(row.mag, 2)}`];
+        if (row.spectral_type) parts.push(`spectral type ${row.spectral_type}`);
+        const distance = formatDistance(row.distance_ly);
+        if (distance) parts.push(`about ${distance} away`);
+        return `${parts.join(", ")}. These figures are the Hipparcos measurements stored for this star.`;
+      }
+      if (row.object_type === "satellite") {
+        return `${row.name} is a satellite from the CelesTrak elements, NORAD ${row.catalog_id}. It is ${fmt(row.alt_deg, 1)}° up.`;
+      }
+      return `${row.name} is ${fmt(row.alt_deg, 1)}° up and ${fmt(row.az_deg, 1)}° from true north. The place comes from the JPL ephemeris.`;
+    }
+
     function openDetail(row) {
       selectedId = row.catalog_id;
       const panel = document.querySelector("#detail");
       document.querySelector("#detail-name").textContent = row.name;
+      document.querySelector("#detail-summary").textContent = detailSummary(row);
+      const distance = formatDistance(row.distance_ly);
+      const motion = formatMotion(row);
       const facts = [
         ["Kind", kindLabel(row)],
-        ["Catalog", row.object_type === "star" ? `HIP ${row.catalog_id}` : row.object_type === "satellite" ? `NORAD ${row.catalog_id}` : "—"],
+        ["Catalog", row.object_type === "star" ? `Hipparcos ${row.catalog_id}` : row.object_type === "satellite" ? `NORAD ${row.catalog_id}` : "JPL DE421"],
         ["Magnitude", row.mag == null ? "—" : fmt(row.mag, 2)],
+        ["Spectral type", row.spectral_type || "—"],
+        ["Distance", distance || "—"],
+        ["Parallax", row.parallax_mas == null ? "—" : `${fmt(row.parallax_mas, 2)} mas`],
+        ["Proper motion", motion || "—"],
         ["Altitude", `${fmt(row.alt_deg, 1)}°`],
         ["Azimuth", `${fmt(row.az_deg, 1)}° from true north`],
-        ["Right ascension", row.ra_deg == null ? "—" : `${fmt(row.ra_deg, 2)}°`],
+        ["Right ascension", row.ra_deg == null ? "—" : `${formatHours(row.ra_deg)} (${fmt(row.ra_deg, 2)}°)`],
         ["Declination", row.dec_deg == null ? "—" : `${fmt(row.dec_deg, 2)}°`]
       ];
       const list = document.querySelector("#detail-facts");
       list.replaceChildren();
       for (const [name, value] of facts) {
+        if (!value || value === "—") continue;
         const term = document.createElement("dt");
         term.textContent = name;
         const detail = document.createElement("dd");
@@ -805,7 +851,10 @@
           float cosine = max(cos(declination), 0.0001);
           float hour = atan(-east / cosine, (uCosLat * zenith - uSinLat * north) / cosine);
           float ra = mod(uSidereal - degrees(hour), 360.0);
-          gl_FragColor = texture2D(uSky, vec2(0.5 - ra / 360.0, 0.5 - degrees(declination) / 180.0));
+          vec3 photo = texture2D(uSky, vec2(0.5 - ra / 360.0, 0.5 - degrees(declination) / 180.0)).rgb;
+          float lift = pow(clamp(1.0 - zenith, 0.0, 1.0), 1.7);
+          vec3 horizon = vec3(0.025, 0.04, 0.07) * lift * (1.0 - photo);
+          gl_FragColor = vec4(photo + horizon, 1.0);
         }
       `);
       gl.compileShader(fragment);
@@ -824,7 +873,7 @@
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       skyGl = gl;
       skyUniforms = {
@@ -843,6 +892,7 @@
         gl.bindTexture(gl.TEXTURE_2D, texture);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+        gl.generateMipmap(gl.TEXTURE_2D);
         skyReady = true;
       };
       image.src = "/api/panorama";

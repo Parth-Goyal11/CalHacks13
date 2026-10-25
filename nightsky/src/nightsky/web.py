@@ -15,6 +15,7 @@ from nightsky.db import connect
 from nightsky.horizon import Aim
 from nightsky.paths import OUTPUT
 from nightsky.photos import catalog_counts, demo_view, identify_photo, read_exif
+from nightsky.stars import fill_spectral_types
 from nightsky.skyview import sky_chart
 
 HOST = "0.0.0.0"
@@ -24,6 +25,11 @@ PAGE = Path(__file__).with_name("viewer.html")
 
 
 def serve(host: str = HOST, port: int = PORT) -> None:
+    try:
+        with connect() as conn:
+            fill_spectral_types(conn)
+    except Exception:
+        pass
     threading.Thread(target=_warm_panorama, daemon=True).start()
     server = ThreadingHTTPServer((host, port), ViewerHandler)
     print(f"Night sky viewer at http://127.0.0.1:{port}")

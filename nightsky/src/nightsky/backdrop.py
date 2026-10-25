@@ -1,12 +1,10 @@
-"""Telescope photograph for the sky map.
+"""Sky photograph for the map.
 
 The picture is Axel Mellinger's all-sky color mosaic, served by the CDS
 hips2fits service. Hubble and JWST frames cover only a few arcminutes, so
-they cannot fill a view tens of degrees wide. Schmidt-plate surveys cover
-the sky, but the plate edges show up as a grid at this width. The cutout is
-turned so celestial north lies in the same direction as on the camera.
-Colors are then graded darker and more saturated, so faint dust and
-nebulae read more like a processed telescope picture.
+they cannot fill a view tens of degrees wide. The mosaic is graded into a
+planetarium field: empty sky becomes a deep navy, and the Milky Way stays a
+smooth luminous band instead of a noisy blue plate.
 """
 
 from __future__ import annotations
@@ -57,16 +55,25 @@ def survey_rotation_deg(latitude: float, longitude: float, when: datetime, aim: 
 
 
 def grade_telescope(image: Image.Image) -> Image.Image:
-    """Push a pale sky survey toward a deeper, more saturated telescope view."""
-    pixels = np.asarray(image.convert("RGB")).astype(np.float32) / 255.0
-    black = float(np.percentile(pixels, 12))
-    white = float(np.percentile(pixels, 99.3))
-    pixels = np.clip((pixels - black) / max(white - black, 1e-3), 0.0, 1.0)
-    pixels = np.power(pixels, 0.88)
-    luma = pixels @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
-    pixels = np.clip(luma[..., None] + (pixels - luma[..., None]) * 2.3, 0.0, 1.0)
-    pixels = np.clip((pixels - 0.5) * 1.12 + 0.5, 0.0, 1.0)
-    return Image.fromarray((pixels * 255.0).round().astype(np.uint8), "RGB")
+    """Smooth a sky survey into a deep field with a soft Milky Way."""
+    width, height = image.size
+    source = image.convert("RGB")
+    dust_image = source.resize((max(2, width // 4), max(2, height // 4)), Image.Resampling.BOX)
+    dust_image = dust_image.resize((width, height), Image.Resampling.LANCZOS)
+    dust = np.asarray(dust_image).astype(np.float32) / 255.0
+    luma = dust @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    black = float(np.percentile(luma, 58))
+    white = float(np.percentile(luma, 99.4))
+    tone = np.clip((luma - black) / max(white - black, 1e-3), 0.0, 1.0)
+    tone = np.power(tone, 0.8)
+    color = dust / np.maximum(luma[..., None], 0.045)
+    color = np.clip(color * np.array([1.12, 1.0, 0.82], dtype=np.float32), 0.0, 3.5)
+    colored = np.clip(color * (0.12 + tone[..., None]), 0.0, 1.0)
+    chroma = colored @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    colored = np.clip(chroma[..., None] + (colored - chroma[..., None]) * 1.65, 0.0, 1.0)
+    navy = np.array([0.012, 0.022, 0.05], dtype=np.float32)
+    sky = navy * (1.0 - tone[..., None]) + colored * tone[..., None]
+    return Image.fromarray((np.clip(sky, 0.0, 1.0) * 255.0).round().astype(np.uint8), "RGB")
 
 
 def pixel_radec(x: float, y: float, aim: Aim, latitude: float, longitude: float, when: datetime):
@@ -90,7 +97,7 @@ def pixel_radec(x: float, y: float, aim: Aim, latitude: float, longitude: float,
 def panorama_jpeg() -> bytes:
     """One graded all-sky photograph. The page redraws a view from it as the slider moves."""
     _CACHE.mkdir(parents=True, exist_ok=True)
-    path = _CACHE / f"panorama-v5-{PANORAMA_WIDTH}.jpg"
+    path = _CACHE / f"panorama-v6-{PANORAMA_WIDTH}.jpg"
     if path.is_file() and path.stat().st_size > 1000:
         return path.read_bytes()
     query = urllib.parse.urlencode(
@@ -116,7 +123,7 @@ def panorama_jpeg() -> bytes:
     if not body.startswith(b"\xff\xd8"):
         raise RuntimeError("The sky survey did not return a photograph.")
     graded = io.BytesIO()
-    grade_telescope(Image.open(io.BytesIO(body))).save(graded, format="JPEG", quality=86)
+    grade_telescope(Image.open(io.BytesIO(body))).save(graded, format="JPEG", quality=92, subsampling=0)
     body = graded.getvalue()
     path.write_bytes(body)
     return body
@@ -129,7 +136,7 @@ def survey_jpeg(latitude: float, longitude: float, when: datetime, aim: Aim) -> 
     rotation = survey_rotation_deg(latitude, longitude, when, aim)
     ra, dec = _altaz_to_equatorial(aim.altitude_deg, aim.azimuth_deg, latitude, longitude, when)
     key = hashlib.sha256(
-        f"v5|{SURVEY}|{latitude:.2f}|{longitude:.2f}|{ra:.2f}|{dec:.2f}|{-rotation:.1f}|{fov:.1f}|{aim.width}|{aim.height}".encode()
+        f"v6|{SURVEY}|{latitude:.2f}|{longitude:.2f}|{ra:.2f}|{dec:.2f}|{-rotation:.1f}|{fov:.1f}|{aim.width}|{aim.height}".encode()
     ).hexdigest()[:24]
     path = _CACHE / f"{key}.jpg"
     if path.is_file() and path.stat().st_size > 1000:
@@ -157,7 +164,7 @@ def survey_jpeg(latitude: float, longitude: float, when: datetime, aim: Aim) -> 
     if not body.startswith(b"\xff\xd8"):
         raise RuntimeError("The sky survey did not return a photograph.")
     graded = io.BytesIO()
-    grade_telescope(Image.open(io.BytesIO(body))).save(graded, format="JPEG", quality=86)
+    grade_telescope(Image.open(io.BytesIO(body))).save(graded, format="JPEG", quality=92, subsampling=0)
     body = graded.getvalue()
     path.write_bytes(body)
     return body

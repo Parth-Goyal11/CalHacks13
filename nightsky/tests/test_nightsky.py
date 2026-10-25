@@ -451,6 +451,8 @@ def test_polaris_altitude_matches_latitude_and_centers_the_lens(db):
     chart = sky_chart(conn, 37.77, -122.42, when)
     polaris = chart["polaris"]
     assert polaris["name"] == "Polaris"
+    assert polaris["spectral_type"]
+    assert 350 < polaris["distance_ly"] < 550
     assert 30 < polaris["ra_deg"] < 50
     assert polaris["dec_deg"] > 88
     assert abs(polaris["alt_deg"] - 37.77) < 1.2
@@ -631,24 +633,25 @@ def test_screen_center_is_the_aimed_direction():
     assert abs(dec - expected_dec) < 0.05
 
 
-def test_telescope_grade_saturates_a_pale_sky():
+def test_catalog_distance_uses_hipparcos_parallax():
+    from nightsky.stars import distance_ly
+
+    assert distance_ly(379.21) == pytest.approx(8.60, abs=0.05)
+    assert distance_ly(1.2) is None
+    assert distance_ly(None) is None
+
+
+def test_planetarium_grade_keeps_a_deep_sky_and_a_bright_band():
     from nightsky.backdrop import grade_telescope
 
-    pale = Image.new("RGB", (48, 48))
-    for y in range(48):
-        for x in range(48):
-            pale.putpixel((x, y), (70 + x, 80, 110))
-    for y in range(16, 32):
-        for x in range(16, 32):
-            pale.putpixel((x, y), (150, 70, 90))
-    graded = np.asarray(grade_telescope(pale)).astype(float)
-    original = np.asarray(pale).astype(float)
-
-    def chroma(pixels):
-        spread = pixels.max(axis=2) - pixels.min(axis=2)
-        return float(spread.mean())
-
-    assert chroma(graded) > chroma(original) * 1.5
+    rng = np.random.default_rng(0)
+    pixels = rng.integers(30, 80, size=(64, 64, 3), dtype=np.uint8)
+    pixels[24:40, :] = (190, 160, 110)
+    graded = np.asarray(grade_telescope(Image.fromarray(pixels, "RGB"))).astype(float)
+    sky = graded[:8, :8]
+    band = graded[28:36, 16:48]
+    assert sky.mean() < 35
+    assert band.mean() > sky.mean() + 40
 
 
 def test_survey_roll_turns_celestial_north():
@@ -679,6 +682,8 @@ def test_viewer_page_and_file_guard():
         assert "phonePose" in page
         assert "90 - event.beta" not in page
         assert "Click a name" in page
+        assert "light-years" in page
+        assert "spectral type" in page
         assert "Scan this photo" in page
         assert "Mellinger" in page
         assert "Hubble and JWST" in page

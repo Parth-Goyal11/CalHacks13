@@ -15,11 +15,20 @@ from nightsky.paths import SKYFIELD, STAR_NAMES
 from nightsky.solve import Star
 
 MAG_LIMIT = 8.0
+LY_PER_PARSEC = 3.261563777
+
+
+def distance_ly(parallax_mas: float | None) -> float | None:
+    """Light-years from a Hipparcos parallax. Below 2 mas the error is too large to quote."""
+    if parallax_mas is None or parallax_mas < 2.0:
+        return None
+    return 1000.0 / parallax_mas * LY_PER_PARSEC
 
 
 def load_stars(conn: psycopg.Connection, mag_limit: float = MAG_LIMIT) -> int:
     frame, checksum, cache_name = _read_hipparcos()
     names = _read_names()
+    spectra = _spectral_types()
     rows = []
     for hip, row in frame.iterrows():
         mag = row["magnitude"]
@@ -36,13 +45,14 @@ def load_stars(conn: psycopg.Connection, mag_limit: float = MAG_LIMIT) -> int:
                 _optional_float(row["ra_mas_per_year"]),
                 _optional_float(row["dec_mas_per_year"]),
                 _optional_float(row["parallax_mas"]),
+                spectra.get(catalog_id),
             )
         )
     with conn.cursor() as cur:
         cur.execute("truncate stars")
         with cur.copy(
             """
-            copy stars (catalog_id, name, ra_deg, dec_deg, mag, pm_ra, pm_dec, parallax)
+            copy stars (catalog_id, name, ra_deg, dec_deg, mag, pm_ra, pm_dec, parallax, spectral_type)
             from stdin
             """
         ) as copy:
@@ -117,3 +127,42 @@ def _optional_float(value):
     if value != value:
         return None
     return float(value)
+
+
+def fill_spectral_types(conn: psycopg.Connection) -> int:
+    """Write Hipparcos spectral types into rows that were loaded without them."""
+    with conn.cursor() as cur:
+        cur.execute("select catalog_id from stars where spectral_type is null")
+        missing = [row[0] for row in cur.fetchall()]
+    if not missing:
+        return 0
+    spectra = _spectral_types()
+    updates = [(spectra[hip], hip) for hip in missing if hip in spectra]
+    if not updates:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany("update stars set spectral_type = %s where catalog_id = %s", updates)
+    conn.commit()
+    return len(updates)
+
+
+def _spectral_types() -> dict[str, str]:
+    cached = getattr(_spectral_types, "cache", None)
+    if cached is not None:
+        return cached
+    found: dict[str, str] = {}
+    path = SKYFIELD / "hip_main.dat"
+    if not path.is_file():
+        _spectral_types.cache = found
+        return found
+    with path.open(encoding="ascii", errors="replace") as handle:
+        for line in handle:
+            parts = line.split("|")
+            if len(parts) < 77:
+                continue
+            hip = parts[1].strip()
+            spectral = parts[76].strip()
+            if hip and spectral:
+                found[hip] = spectral
+    _spectral_types.cache = found
+    return found

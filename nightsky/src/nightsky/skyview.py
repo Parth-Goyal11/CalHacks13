@@ -20,6 +20,7 @@ from nightsky.paths import SKYFIELD
 from nightsky.planets import open_ephemeris
 from nightsky.satellites import satellite_from_elements
 from nightsky.solve import Star
+from nightsky.stars import distance_ly
 from nightsky.wcs import angular_separation_deg
 
 POLARIS_ID = "11767"
@@ -104,7 +105,7 @@ def _star_altaz(conn, latitude: float, longitude: float, when: datetime) -> list
     with conn.cursor() as cur:
         cur.execute(
             """
-            select catalog_id, name, ra_deg, dec_deg, mag
+            select catalog_id, name, ra_deg, dec_deg, mag, parallax, pm_ra, pm_dec, spectral_type
             from stars
             where mag <= %s
             """,
@@ -118,6 +119,10 @@ def _star_altaz(conn, latitude: float, longitude: float, when: datetime) -> list
     ra = np.array([row[2] for row in rows], dtype=float)
     dec = np.array([row[3] for row in rows], dtype=float)
     mag = [row[4] for row in rows]
+    parallax = [row[5] for row in rows]
+    pm_ra = [row[6] for row in rows]
+    pm_dec = [row[7] for row in rows]
+    spectral = [row[8] for row in rows]
     altitude, azimuth = _equatorial_to_altaz(ra, dec, latitude, longitude, when)
     found = []
     for index, hip in enumerate(catalog_id):
@@ -127,6 +132,11 @@ def _star_altaz(conn, latitude: float, longitude: float, when: datetime) -> list
                 "name": name[index] or f"HIP {hip}",
                 "object_type": "star",
                 "mag": mag[index],
+                "parallax_mas": parallax[index],
+                "pm_ra": pm_ra[index],
+                "pm_dec": pm_dec[index],
+                "spectral_type": spectral[index],
+                "distance_ly": distance_ly(parallax[index]),
                 "ra_deg": float(ra[index]),
                 "dec_deg": float(dec[index]),
                 "alt_deg": float(altitude[index]),
