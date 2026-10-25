@@ -635,6 +635,25 @@ function HomeScreen({
       </article>
       <div id="sky-feed" role="tabpanel" aria-labelledby={`feed-${feed}`}>
         <p className="feed-preview-label">A glimpse of Yonder · sample posts</p>
+        <div className="feed-people" aria-label="Sample sky posts">
+          {posts.map((post, index) => (
+            <button
+              type="button"
+              className="feed-person"
+              key={post.name}
+              onClick={() =>
+                document.getElementById(`sample-post-${index}`)?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+              }
+              aria-label={`Jump to ${post.name}'s sample post`}
+            >
+              <img src={post.avatar} alt="" />
+              <span>{post.name}</span>
+            </button>
+          ))}
+        </div>
         <div
           className="social-feed"
           aria-label={
@@ -643,7 +662,7 @@ function HomeScreen({
               : "Sample nearby sky posts"
           }
         >
-          {posts.map((post) => {
+          {posts.map((post, index) => {
             const sample: SkyPhoto = {
               id: `friend-${post.name}`,
               image: post.image,
@@ -654,9 +673,15 @@ function HomeScreen({
               credit: "Photography via Unsplash",
             };
             return (
-              <article className="social-post" key={post.name}>
+              <article
+                className="social-post"
+                id={`sample-post-${index}`}
+                key={post.name}
+              >
                 <div className="post-heading">
-                  <span className="post-avatar initials">{post.initials}</span>
+                  <span className="post-avatar">
+                    <img src={post.avatar} alt="" loading="lazy" />
+                  </span>
                   <div>
                     <strong>{post.name}</strong>
                     <span>{sample.location} · sample</span>
