@@ -11,41 +11,31 @@ export const RARITY_ORDER: EventRarity[] = [
 
 export const RARITY_META: Record<
   EventRarity,
-  { label: string; blurb: string; chip: string; active: string; color: string }
+  { label: string; blurb: string; color: string }
 > = {
   common: {
     label: "Common",
     blurb: "Full moons & dark-sky nights — easy naked-eye targets.",
-    chip: "border-zinc-600 text-zinc-300 hover:border-zinc-400",
-    active: "border-zinc-300 bg-zinc-200 text-zinc-950",
     color: "#a1a1aa",
   },
   uncommon: {
     label: "Uncommon",
     blurb: "ISS passes, bright planets, modest meteor peaks.",
-    chip: "border-emerald-700/70 text-emerald-300 hover:border-emerald-500",
-    active: "border-emerald-300 bg-emerald-300 text-zinc-950",
     color: "#34d399",
   },
   rare: {
     label: "Rare",
     blurb: "Big showers (Perseids/Geminids) and night launches.",
-    chip: "border-sky-700/70 text-sky-300 hover:border-sky-500",
-    active: "border-sky-300 bg-sky-300 text-zinc-950",
     color: "#38bdf8",
   },
   epic: {
     label: "Epic",
     blurb: "Lunar eclipses & strong aurora windows.",
-    chip: "border-violet-600/70 text-violet-300 hover:border-violet-400",
-    active: "border-violet-300 bg-violet-300 text-zinc-950",
     color: "#a78bfa",
   },
   legendary: {
     label: "Legendary",
     blurb: "Path-dependent solar eclipses — travel to see them.",
-    chip: "border-amber-500/70 text-amber-200 hover:border-amber-400",
-    active: "border-amber-300 bg-amber-300 text-zinc-950",
     color: "#fbbf24",
   },
 };
@@ -60,6 +50,7 @@ export function formatWhen(iso: string) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZoneName: "short",
   });
 }
 

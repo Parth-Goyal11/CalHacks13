@@ -378,11 +378,12 @@ export default function YonderApp({
             {activeTab === "explore" && (
               <ExploreScreen
                 place={sky.place}
+                locationChosen={sky.chosen}
                 weather={sky.weather}
                 weatherError={sky.weatherError}
                 onRetry={sky.retry}
                 onLocation={() => setSheet("location")}
-                onOpen={openPhoto}
+                eventsPlace={eventsPlace}
               />
             )}
             {activeTab === "memories" && (
@@ -407,8 +408,8 @@ export default function YonderApp({
                 <button type="button" className="events-back" onClick={() => navigate("explore")}>← Back to Explore</button>
                 <EventsBoard
                   place={eventsPlace}
+                  locationChosen={sky.chosen}
                   onLocation={() => setSheet("location")}
-                  onCapture={openCamera}
                 />
               </section>
             )}
@@ -713,35 +714,26 @@ function HomeScreen({
 
 function ExploreScreen({
   place,
+  locationChosen,
   weather,
   weatherError,
   onRetry,
   onLocation,
-  onOpen,
+  eventsPlace,
 }: {
   place: Place;
+  locationChosen: boolean;
   weather: CurrentWeather | null;
   weatherError: boolean;
   onRetry: () => void;
   onLocation: () => void;
-  onOpen: (photo: SkyPhoto) => void;
+  eventsPlace: {
+    id: string;
+    label: string;
+    latitude: number;
+    longitude: number;
+  };
 }) {
-  const inspiration = [
-    { title: "Open skies", image: IMG.ridge },
-    { title: "Darker horizons", image: IMG.field },
-    { title: "Deep-sky color", image: IMG.orion },
-  ];
-  function openImage(title: string, image: string) {
-    onOpen({
-      id: `inspiration-${title}`,
-      title,
-      image,
-      date: "Astrophotography inspiration",
-      location: "Sample photograph",
-      objects: [],
-      credit: "Photography via Unsplash",
-    });
-  }
   return (
     <section
       className="screen scroll-screen explore-screen"
@@ -754,9 +746,13 @@ function ExploreScreen({
             className="eyebrow location-text"
             onClick={onLocation}
           >
-            {place.name} · {coordinateLabel(place)}
+            {locationChosen
+              ? `${place.name} · ${coordinateLabel(place)}`
+              : `Showing ${place.name} preview · choose location`}
           </button>
-          <h1 id="explore-title">Made for your sky</h1>
+          <h1 id="explore-title">
+            {locationChosen ? "Made for your sky" : "Explore the night sky"}
+          </h1>
         </div>
         <span className="sky-condition">{conditionLabel(weather)}</span>
       </header>
@@ -783,52 +779,12 @@ function ExploreScreen({
           <span role="status">Checking the sky…</span>
         )}
       </div>
-      <a className="events-entry" href="/events">
-        <span className="events-entry-mark"><SkyIcon name="spark" size={17} /></span>
-        <span><strong>Upcoming sky events</strong><small>Find what’s worth catching next</small></span>
-        <SkyIcon name="arrow" size={17} />
-      </a>
-      <button
-        className="feature-story"
-        type="button"
-        onClick={() => openImage("A little farther out", IMG.orion)}
-      >
-        <img src={IMG.orion} alt="Nebula astrophotography" />
-        <span className="feature-gradient" />
-        <span className="feature-copy">
-          <small>Beyond the city lights</small>
-          <strong>A little farther out</strong>
-          <span>A sky worth getting to know</span>
-        </span>
-        <span className="feature-arrow">
-          <SkyIcon name="arrow" size={20} />
-        </span>
-      </button>
-      <div className="section-heading">
-        <h2>Find your next night</h2>
-        <span>Inspiration</span>
-      </div>
-      <div className="object-rail">
-        {inspiration.map((item) => (
-          <button
-            type="button"
-            className="object-card"
-            key={item.title}
-            onClick={() => openImage(item.title, item.image)}
-          >
-            <img
-              src={item.image}
-              alt={`${item.title} astrophotography`}
-              loading="lazy"
-            />
-            <span className="object-card-shade" />
-            <span>
-              <strong>{item.title}</strong>
-              <small>Explore the photograph</small>
-            </span>
-          </button>
-        ))}
-      </div>
+      <EventsBoard
+        place={eventsPlace}
+        locationChosen={locationChosen}
+        onLocation={onLocation}
+        compact
+      />
       <div className="explore-note">
         <SkyIcon name="spark" size={18} />
         <p>
