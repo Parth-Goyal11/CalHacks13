@@ -24,6 +24,24 @@ from nightsky.wcs import angular_separation_deg
 
 POLARIS_ID = "11767"
 STAR_MAG_LIMIT = 5.0
+# Stick figures use Hipparcos ids. The lines are the familiar naked-eye
+# patterns, not a licensed chart. A star fainter than the map limit is omitted.
+FIGURES = (
+    {"name": "Ursa Major", "paths": [["54061", "53910", "58001", "59774", "54061"], ["59774", "62956", "65378", "67301"]]},
+    {"name": "Ursa Minor", "paths": [["11767", "85822", "82080", "77055", "72607", "75097", "79822", "77055"]]},
+    {"name": "Cassiopeia", "paths": [["746", "3179", "4427", "6686", "8886"]]},
+    {
+        "name": "Orion",
+        "paths": [
+            ["27989", "25428", "25336"],
+            ["27989", "26727"],
+            ["25336", "25930", "26311", "26727", "27366", "24436", "25930"],
+        ],
+    },
+    {"name": "Cygnus", "paths": [["102098", "100453", "95947"], ["102488", "100453", "97165"]]},
+    {"name": "Leo", "paths": [["50583", "54872", "57632"], ["50583", "54879", "57632"]]},
+    {"name": "Summer Triangle", "paths": [["91262", "102098", "97649", "91262"]]},
+)
 _BODIES = (
     ("moon", "Moon", "moon"),
     ("mercury", "Mercury", "planet"),
@@ -52,6 +70,7 @@ def sky_chart(conn: psycopg.Connection, latitude: float, longitude: float, when:
         "sidereal_deg": local_sidereal_deg(longitude, moment),
         "polaris": polaris,
         "objects": objects,
+        "figures": list(FIGURES),
     }
 
 

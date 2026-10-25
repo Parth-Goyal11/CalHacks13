@@ -153,7 +153,7 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">The map is the catalog drawn for where you are and what time it is, over a photograph of the real sky. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, the compass can turn the map. The camera replaces the photograph, and the names stay on top so stars in the lens can line up with them. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
+    <p class="lede">The map is the catalog drawn for where you are and what time it is, over a photograph of the real sky. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, hold it up and the sky turns with the compass and the tilt, the way a planetarium does. The camera can replace the photograph so the names sit on the real sky. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
@@ -190,9 +190,9 @@
           </label>
         </div>
         <div class="phone">
-          <p class="note">On a phone only. A laptop has no compass, and its camera is not pointed at the sky, so the sliders are how you look around here.</p>
-          <button id="follow" type="button">Turn with the phone</button>
-          <p class="hint">The map follows the compass and how far you tip the phone. The browser asks to use motion sensors. Tap again to go back to the sliders.</p>
+          <p class="note">On a phone, this is the sky guide. A laptop has no compass, and its camera is not pointed at the sky, so the sliders are how you look around here.</p>
+          <button id="follow" class="primary" type="button">Hold the phone to the sky</button>
+          <p class="hint">The photograph, the constellation lines, and the names turn as you turn the phone. North comes from the compass, corrected to true north. Tip the phone flat once if north feels off, or wave it in a figure-eight. The browser asks to use motion sensors, then the rear camera. If you decline the camera, the photograph keeps turning. Tap again to go back to the sliders.</p>
           <button id="open-camera" type="button">Show the sky behind the names</button>
           <p class="hint">Turns on the rear camera and leaves the names drawn on top of it, so stars through the lens can line up with the marks. The sky photograph returns when the camera is hidden. The browser asks to use the camera. Tap again to hide it.</p>
           <button id="scan" class="primary" type="button">Scan this photo</button>
@@ -415,15 +415,105 @@
       return { latitude, longitude, taken_at: time.value };
     }
 
+    let sensorAim = null;
+    let compassLock = null;
+    let sawAbsolute = false;
+    let lastOrientation = null;
+    let orientationBound = false;
+
     function aimNow() {
       const box = document.querySelector("#viewport");
-      return {
+      const pose = followPhone && sensorAim ? sensorAim : {
         azimuth: Number(headingInput.value),
         altitude: Number(tiltInput.value),
-        roll: Number(rollInput.value),
+        roll: Number(rollInput.value)
+      };
+      return {
+        azimuth: pose.azimuth,
+        altitude: pose.altitude,
+        roll: pose.roll,
         fov: Number(fovInput.value),
         width: canvas.width || box.clientWidth,
         height: canvas.height || box.clientHeight
+      };
+    }
+
+    function alphaFromCompass(magneticHeading, declination) {
+      const trueHeading = (magneticHeading + declination + 360) % 360;
+      return (360 - trueHeading) % 360;
+    }
+
+    function phonePose(alphaDeg, betaDeg, gammaDeg, screenDeg) {
+      const x = betaDeg * Math.PI / 180;
+      const y = gammaDeg * Math.PI / 180;
+      const z = alphaDeg * Math.PI / 180;
+      const cX = Math.cos(x);
+      const sX = Math.sin(x);
+      const cY = Math.cos(y);
+      const sY = Math.sin(y);
+      const cZ = Math.cos(z);
+      const sZ = Math.sin(z);
+      const matrix = [
+        [cZ * cY - sZ * sX * sY, -cX * sZ, cY * sZ * sX + cZ * sY],
+        [cY * sZ + cZ * sX * sY, cZ * cX, sZ * sY - cZ * cY * sX],
+        [-cX * sY, sX, cX * cY]
+      ];
+      const forward = [-matrix[0][2], -matrix[1][2], -matrix[2][2]];
+      const screen = screenDeg * Math.PI / 180;
+      const deviceUp = [Math.sin(screen), Math.cos(screen), 0];
+      const screenUp = [
+        matrix[0][0] * deviceUp[0] + matrix[0][1] * deviceUp[1],
+        matrix[1][0] * deviceUp[0] + matrix[1][1] * deviceUp[1],
+        matrix[2][0] * deviceUp[0] + matrix[2][1] * deviceUp[1]
+      ];
+      return poseFromVectors(forward, screenUp);
+    }
+
+    function poseFromVectors(forward, screenUp) {
+      const length = Math.hypot(forward[0], forward[1], forward[2]);
+      if (length < 1e-8) return { azimuth: 0, altitude: 0, roll: 0 };
+      forward = forward.map((value) => value / length);
+      const altitude = Math.asin(Math.max(-1, Math.min(1, forward[2]))) * 180 / Math.PI;
+      let east = forward[0];
+      let north = forward[1];
+      if (Math.hypot(east, north) < 1e-6) {
+        east = 0;
+        north = 0;
+      }
+      const azimuth = (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+      let right = cross(forward, [0, 0, 1]);
+      if (norm(right) < 1e-4) {
+        const heading = [Math.sin(azimuth * Math.PI / 180), Math.cos(azimuth * Math.PI / 180), 0];
+        right = cross(forward, heading);
+      }
+      right = scale(right, 1 / norm(right));
+      let up = cross(right, forward);
+      up = scale(up, 1 / norm(up));
+      const lifted = [
+        screenUp[0] - forward[0] * dot(screenUp, forward),
+        screenUp[1] - forward[1] * dot(screenUp, forward),
+        screenUp[2] - forward[2] * dot(screenUp, forward)
+      ];
+      const liftedLength = norm(lifted);
+      let roll = liftedLength < 1e-5
+        ? 0
+        : Math.atan2(dot(scale(lifted, 1 / liftedLength), right), dot(scale(lifted, 1 / liftedLength), up)) * 180 / Math.PI;
+      if (Math.abs(roll + 180) < 1e-6) roll = 180;
+      return { azimuth, altitude, roll };
+    }
+
+    function blendAngle(from, to, amount) {
+      const delta = ((to - from + 540) % 360) - 180;
+      return from + delta * amount;
+    }
+
+    function smoothPose(next) {
+      if (!sensorAim) return next;
+      const amount = 0.45;
+      return {
+        azimuth: (blendAngle(sensorAim.azimuth, next.azimuth, amount) + 360) % 360,
+        altitude: sensorAim.altitude + (next.altitude - sensorAim.altitude) * amount,
+        roll: blendAngle(sensorAim.roll, next.roll, amount)
       };
     }
 
@@ -555,6 +645,7 @@
         pen = true;
       }
       context.stroke();
+      drawFigures(context, aim);
       const placed = [];
       const visible = [];
       hits = [];
@@ -626,7 +717,10 @@
           ? `Polaris is ${fmt(polaris.alt_deg, 1)}° up and ${fmt(polaris.az_deg, 1)}° from true north.`
           : "Polaris is the north mark.";
         const loading = skyReady || cameraOn ? "" : " The sky photograph is loading.";
-        skyStatus.textContent = `${polarisLine} ${visible.length} named objects are in this lens.${correction}${sensorNote}${loading}`;
+        const tracking = followPhone && sensorAim
+          ? ` The phone is aimed ${fmt(sensorAim.altitude, 0)}° up, facing ${fmt(sensorAim.azimuth, 0)}°. The sky turns with it.`
+          : sensorNote;
+        skyStatus.textContent = `${polarisLine} ${visible.length} named objects are in this lens.${correction}${tracking}${loading}`;
       }
       const now = performance.now();
       if (document.querySelector("#tab-sky").classList.contains("active") && now - listedAt > 400) {
@@ -792,36 +886,133 @@
       }
     }
 
-    function onOrient(event) {
-      if (!followPhone || applying) return;
-      const screenAngle = (screen.orientation && screen.orientation.angle) || Number(window.orientation || 0);
-      let heading = null;
-      if (event.webkitCompassHeading != null && chart && chart.declination_deg != null) {
-        heading = (event.webkitCompassHeading + chart.declination_deg + 360) % 360;
-      } else if (event.alpha != null) {
-        const compass = (360 - event.alpha + screenAngle) % 360;
-        const shift = event.absolute || chart == null ? 0 : (chart.declination_deg || 0);
-        heading = (compass + shift + 360) % 360;
+    function drawFigures(context, aim) {
+      if (!chart || !chart.figures) return;
+      const byId = new Map();
+      for (const row of chart.objects) byId.set(String(row.catalog_id), row);
+      context.save();
+      context.lineWidth = 1.25;
+      context.strokeStyle = "rgba(226, 177, 90, 0.5)";
+      context.fillStyle = "rgba(226, 177, 90, 0.82)";
+      context.font = "15px Palatino, Georgia, serif";
+      for (const figure of chart.figures) {
+        const anchors = [];
+        for (const path of figure.paths) {
+          context.beginPath();
+          let pen = false;
+          for (const id of path) {
+            const row = byId.get(String(id));
+            if (!row || row.alt_deg < -1) { pen = false; continue; }
+            const point = project(row.alt_deg, row.az_deg, aim);
+            if (!point || point[0] < -30 || point[1] < -30 || point[0] > aim.width + 30 || point[1] > aim.height + 30) {
+              pen = false;
+              continue;
+            }
+            if (!pen) context.moveTo(point[0], point[1]);
+            else context.lineTo(point[0], point[1]);
+            pen = true;
+            if (point[0] >= 0 && point[1] >= 0 && point[0] < aim.width && point[1] < aim.height) anchors.push(point);
+          }
+          context.stroke();
+        }
+        if (anchors.length < 2) continue;
+        const x = anchors.reduce((sum, point) => sum + point[0], 0) / anchors.length;
+        const y = anchors.reduce((sum, point) => sum + point[1], 0) / anchors.length;
+        if (x < 8 || y < 18 || x > aim.width - 8 || y > aim.height - 8) continue;
+        context.lineWidth = 3;
+        context.strokeStyle = "rgba(0, 0, 0, 0.75)";
+        context.strokeText(figure.name, x + 6, y - 8);
+        context.fillText(figure.name, x + 6, y - 8);
+        context.lineWidth = 1.25;
+        context.strokeStyle = "rgba(226, 177, 90, 0.5)";
       }
-      applying = true;
-      if (heading != null) headingInput.value = String(heading);
-      if (event.beta != null) tiltInput.value = String(Math.max(0, Math.min(90, 90 - event.beta)));
-      if (event.gamma != null) rollInput.value = String(Math.max(-45, Math.min(45, event.gamma)));
-      applying = false;
+      context.restore();
+    }
+
+    function screenAngle() {
+      if (screen.orientation && Number.isFinite(screen.orientation.angle)) return screen.orientation.angle;
+      return Number(window.orientation || 0);
+    }
+
+    function applyOrientation(sample) {
+      if (!followPhone || !sample || sample.alpha == null || sample.beta == null || sample.gamma == null) return;
+      let alpha = sample.alpha;
+      if (sample.webkitCompassHeading != null) {
+        const declination = chart && chart.declination_deg ? chart.declination_deg : 0;
+        const compassAlpha = alphaFromCompass(sample.webkitCompassHeading, declination);
+        const fromFlat = Math.min(Math.abs(sample.beta), Math.abs(180 - Math.abs(sample.beta)));
+        if (compassLock == null || fromFlat < 50) compassLock = compassAlpha - sample.alpha;
+        alpha = sample.alpha + compassLock;
+      }
+      sensorAim = smoothPose(phonePose(alpha, sample.beta, sample.gamma, screenAngle()));
+    }
+
+    function onOrient(event) {
+      if (!followPhone) return;
+      if (event.webkitCompassHeading == null && event.absolute !== true) {
+        if (sawAbsolute) return;
+      } else {
+        sawAbsolute = true;
+      }
+      lastOrientation = {
+        alpha: event.alpha,
+        beta: event.beta,
+        gamma: event.gamma,
+        absolute: event.absolute,
+        webkitCompassHeading: event.webkitCompassHeading
+      };
+      applyOrientation(lastOrientation);
+    }
+
+    async function startRearCamera() {
+      if (cameraOn || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return false;
+      try {
+        video.srcObject = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" } },
+          audio: false
+        });
+        cameraOn = true;
+        skyPhoto.classList.remove("on");
+        document.querySelector("#open-camera").classList.add("primary");
+        document.querySelector("#open-camera").textContent = "Hide the camera";
+        video.onloadedmetadata = () => {
+          if (video.videoWidth) document.querySelector("#viewport").style.aspectRatio = `${video.videoWidth} / ${video.videoHeight}`;
+        };
+        return true;
+      } catch (error) {
+        return false;
+      }
+    }
+
+    function stopRearCamera() {
+      for (const track of (video.srcObject ? video.srcObject.getTracks() : [])) track.stop();
+      video.srcObject = null;
+      cameraOn = false;
+      document.querySelector("#open-camera").classList.remove("primary");
+      document.querySelector("#open-camera").textContent = "Show the sky behind the names";
     }
 
     document.querySelector("#follow").addEventListener("click", async () => {
       if (followPhone) {
         followPhone = false;
+        sensorAim = null;
+        compassLock = null;
+        sawAbsolute = false;
         sensorNote = "";
-        document.querySelector("#follow").classList.remove("primary");
-        document.querySelector("#follow").textContent = "Turn with the phone";
+        stopRearCamera();
+        document.querySelector("#follow").classList.add("primary");
+        document.querySelector("#follow").textContent = "Hold the phone to the sky";
         skyStatus.textContent = "The sliders are steering the map.";
+        drawChart();
         return;
       }
       const orientation = window.DeviceOrientationEvent;
       if (!orientation) {
         skyStatus.textContent = "This browser has no compass. Drag the heading and the lens height. That button is for a phone.";
+        return;
+      }
+      if (!window.isSecureContext) {
+        skyStatus.textContent = "The compass needs a secure page. Open this on the phone as https, or on localhost.";
         return;
       }
       if (typeof orientation.requestPermission === "function") {
@@ -831,13 +1022,24 @@
           return;
         }
       }
-      window.addEventListener("deviceorientationabsolute", onOrient, true);
-      window.addEventListener("deviceorientation", onOrient, true);
+      if (!orientationBound) {
+        orientationBound = true;
+        window.addEventListener("deviceorientationabsolute", onOrient, true);
+        window.addEventListener("deviceorientation", onOrient, true);
+        if (screen.orientation) {
+          screen.orientation.addEventListener("change", () => applyOrientation(lastOrientation));
+        }
+      }
       followPhone = true;
       userAimed = true;
-      sensorNote = " Hold the phone upright. Turning and tipping it moves the map.";
-      document.querySelector("#follow").classList.add("primary");
-      document.querySelector("#follow").textContent = "Stop turning with the phone";
+      sensorNote = " Point the phone at the sky. The view turns with it.";
+      document.querySelector("#follow").classList.remove("primary");
+      document.querySelector("#follow").textContent = "Stop following the phone";
+      const camera = await startRearCamera();
+      if (!camera && !cameraOn) {
+        sensorNote = " The camera stayed off, so the photograph is turning with the phone.";
+      }
+      drawChart();
     });
 
     document.querySelector("#open-camera").addEventListener("click", async () => {
@@ -904,17 +1106,19 @@
       }
     });
 
-    for (const input of [headingInput, tiltInput, rollInput, fovInput]) {
+    for (const input of [headingInput, tiltInput, rollInput]) {
       input.addEventListener("input", () => {
         if (applying) return;
         userAimed = true;
         followPhone = false;
+        sensorAim = null;
         sensorNote = "";
-        document.querySelector("#follow").classList.remove("primary");
-        document.querySelector("#follow").textContent = "Turn with the phone";
+        document.querySelector("#follow").classList.add("primary");
+        document.querySelector("#follow").textContent = "Hold the phone to the sky";
         drawChart();
       });
     }
+    fovInput.addEventListener("input", () => drawChart());
     for (const id of ["#latitude", "#longitude", "#taken_at"]) {
       document.querySelector(id).addEventListener("change", refreshSky);
     }

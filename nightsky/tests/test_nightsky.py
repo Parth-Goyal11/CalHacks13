@@ -398,6 +398,50 @@ def test_declination_matches_a_wmm2025_sample():
     assert 12 < bay < 14
 
 
+def test_phone_pose_matches_the_rear_camera():
+    from nightsky.phone import alpha_from_compass, phone_pose
+
+    north = phone_pose(0, 90, 0, 0)
+    assert abs(north.azimuth_deg) < 0.2
+    assert abs(north.altitude_deg) < 0.2
+    assert abs(north.roll_deg) < 0.2
+
+    east = phone_pose(270, 90, 0, 0)
+    assert abs(east.azimuth_deg - 90) < 0.2
+    assert abs(east.altitude_deg) < 0.2
+    assert abs(east.roll_deg) < 0.2
+
+    overhead = phone_pose(180, 180, 0, 0)
+    assert overhead.altitude_deg > 89
+    assert abs(overhead.roll_deg) < 0.2
+
+    ground = phone_pose(0, 0, 0, 0)
+    assert ground.altitude_deg < -89
+    assert abs(ground.roll_deg) < 0.2 or abs(abs(ground.roll_deg) - 180) < 0.2
+
+    landscape = phone_pose(0, 90, 0, 90)
+    assert abs(landscape.azimuth_deg) < 0.2
+    assert abs(landscape.altitude_deg) < 0.2
+    assert abs(landscape.roll_deg - 90) < 0.2
+
+    alpha = alpha_from_compass(0, 12.8)
+    magnetic = phone_pose(alpha, 90, 0, 0)
+    assert abs(magnetic.azimuth_deg - 12.8) < 0.2
+
+
+def test_sky_chart_includes_orion_and_the_dipper(db):
+    from nightsky.skyview import sky_chart
+
+    conn, _summary = db
+    when = datetime(2026, 10, 25, 5, 0, tzinfo=timezone.utc)
+    chart = sky_chart(conn, 37.77, -122.42, when)
+    names = {figure["name"] for figure in chart["figures"]}
+    assert {"Orion", "Ursa Major", "Cassiopeia", "Cygnus"} <= names
+    orion = next(figure for figure in chart["figures"] if figure["name"] == "Orion")
+    belt = next(path for path in orion["paths"] if "26311" in path)
+    assert belt[belt.index("26311") - 1 : belt.index("26311") + 2] == ["25930", "26311", "26727"]
+
+
 def test_polaris_altitude_matches_latitude_and_centers_the_lens(db):
     from nightsky.horizon import Aim, project_altaz
     from nightsky.skyview import sky_chart
@@ -630,8 +674,10 @@ def test_viewer_page_and_file_guard():
             page = response.read().decode()
         assert "Night sky" in page
         assert "Sky map" in page
-        assert "Turn with the phone" in page
+        assert "Hold the phone to the sky" in page
         assert "Show the sky behind the names" in page
+        assert "phonePose" in page
+        assert "90 - event.beta" not in page
         assert "Click a name" in page
         assert "Scan this photo" in page
         assert "Mellinger" in page
