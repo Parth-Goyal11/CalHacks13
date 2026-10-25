@@ -585,12 +585,27 @@
   white-space: nowrap;
 }
 
-.memory-copy small {
+.memory-copy small,
+.memory-copy .creature-boost,
+.memory-copy .evolve-note {
   overflow: hidden;
-  color: var(--mist);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.memory-copy small,
+.memory-copy .evolve-note {
+  color: var(--mist);
+}
+
+.memory-copy .creature-boost {
+  color: var(--champagne);
+  font-size: 11px;
+}
+
+.memory-card.tier-s .creature-boost {
+  color: #ffd678;
 }
 
 .memory-detail {
