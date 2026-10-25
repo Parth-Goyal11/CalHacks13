@@ -51,7 +51,7 @@ Satellite elements refresh when the cached CSV is older than three days. A reloa
 python -m nightsky serve
 ```
 
-Open [http://127.0.0.1:8741](http://127.0.0.1:8741). The sky map draws Hipparcos, the bright planets, the Moon, and visible satellites from your latitude, longitude, and the time. Polaris is true north, and its height above the horizon is your latitude. Drag the heading and lens height to look around. On a phone, Turn with the phone follows the compass and tilt, and Show the sky behind the names puts the rear camera under the labels. A laptop has no compass, so the sliders are the control there.
+Open [http://127.0.0.1:8741](http://127.0.0.1:8741). The sky map draws Hipparcos, the bright planets, the Moon, and visible satellites from your latitude, longitude, and the time. Polaris is true north, and its height above the horizon is your latitude. Drag the heading and lens height to look around. On a phone, Turn with the phone follows the compass and tilt, and Show the sky behind the names puts the rear camera under the labels. Scan this photo runs the same plate solve as a photo with no heading. A name is kept only when the star pattern confirms it. A laptop has no compass, so the sliders are the control there.
 
 The Orion demo is the labeled field already solved from the catalog. Time is taken to the minute. Latitude and longitude are decimal degrees, north and east positive. The browser can fill the device location. A star with no common name is marked with its Hipparcos number.
 

@@ -1,5 +1,12 @@
 """Catalog, plate solve, unlocker client, and MCP config."""
 
+try:
+    import truststore
+
+    truststore.inject_into_ssl()
+except ImportError:
+    pass
+
 import json
 import math
 import threading
@@ -7,7 +14,8 @@ from datetime import datetime, timezone
 from http.client import HTTPConnection
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 import numpy as np
 import pytest
@@ -409,7 +417,7 @@ def test_polaris_altitude_matches_latitude_and_centers_the_lens(db):
     assert any(row["name"] == "Moon" for row in chart["objects"])
 
 
-def test_an_aim_labels_a_blank_photo_without_inventing_a_solve(db, tmp_path):
+def test_an_aim_does_not_name_a_blank_photo(db, tmp_path):
     from nightsky.skyview import sky_chart
 
     conn, _summary = db
@@ -418,7 +426,7 @@ def test_an_aim_labels_a_blank_photo_without_inventing_a_solve(db, tmp_path):
     polaris = chart["polaris"]
     photo = tmp_path / "haze.png"
     save_gray_png(np.full((220, 180), 40, dtype=np.float32), photo)
-    result = identify_photo(
+    aimed = identify_photo(
         conn,
         photo,
         taken_at=when,
@@ -429,11 +437,138 @@ def test_an_aim_labels_a_blank_photo_without_inventing_a_solve(db, tmp_path):
         roll_deg=0,
         fov_deg=60,
     )
-    assert result["ok"] is True
-    assert result["grade"] == "predicted"
-    names = {row["name"] for row in result["identifications"]}
-    assert "Polaris" in names
-    assert result["solve"]["center_dec_deg"] > 80
+    blind = identify_photo(conn, photo, taken_at=when, latitude=37.77, longitude=-122.42)
+    assert aimed["ok"] is False
+    assert aimed["identifications"] == []
+    assert aimed["error"] == blind["error"]
+    assert "named" in aimed["error"]
+
+
+def _confident_names(result: dict) -> set[str]:
+    return {
+        row["name"]
+        for row in result["identifications"]
+        if row["name"] and (row["confidence"] or 0) >= 0.9
+    }
+
+
+def test_camera_aim_names_the_same_stars_as_a_blind_scan(db, tmp_path):
+    conn, _summary = db
+    photo = tmp_path / "orion.png"
+    save_gray_png(render_starfield(stars_for_render(conn), ORION_TRUTH), photo)
+    blind = identify_photo(
+        conn,
+        photo,
+        taken_at=DEMO_WHEN,
+        latitude=31.95,
+        longitude=-110.8,
+    )
+    aimed = identify_photo(
+        conn,
+        photo,
+        taken_at=DEMO_WHEN,
+        latitude=31.95,
+        longitude=-110.8,
+        azimuth_deg=12.0,
+        altitude_deg=40.0,
+        roll_deg=8.0,
+        fov_deg=68.0,
+    )
+    assert blind["ok"] is True
+    assert aimed["ok"] is True
+    assert aimed["grade"] == "solved"
+    assert blind["grade"] == "solved"
+    blind_names = _confident_names(blind)
+    assert {"Mintaka", "Alnilam", "Alnitak"} <= blind_names
+    assert _confident_names(aimed) == blind_names
+
+
+def _vizier_hipparcos(where: str) -> dict[str, tuple[float, float, float]]:
+    """Hipparcos positions from the CDS VizieR service, keyed by catalog id."""
+    query = (
+        "SELECT TOP 500 HIP, RAICRS, DEICRS, Vmag "
+        'FROM "I/239/hip_main" WHERE '
+        + where
+        + " ORDER BY Vmag"
+    )
+    body = urlencode(
+        {"REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "json", "QUERY": query}
+    ).encode()
+    payload = urlopen(
+        Request("https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync", data=body),
+        timeout=90,
+    ).read()
+    table = json.loads(payload)
+    columns = [column["name"] for column in table["metadata"]]
+    found = {}
+    for row in table["data"]:
+        record = dict(zip(columns, row))
+        hip = str(int(record["HIP"]))
+        found[hip] = (float(record["RAICRS"]), float(record["DEICRS"]), float(record["Vmag"]))
+    return found
+
+
+def test_scans_of_online_star_fields_name_the_known_stars(db, tmp_path):
+    """Draw two fields from the live Hipparcos service and scan them."""
+    conn, _summary = db
+    fields = (
+        {
+            "where": "Vmag < 5.5 AND RAICRS BETWEEN 70 AND 98 AND DEICRS BETWEEN -12 AND 12",
+            "wcs": ORION_TRUTH,
+            "expected": {"Mintaka", "Alnilam", "Alnitak", "Rigel"},
+            "hips": set(),
+        },
+        {
+            "where": "Vmag < 5.6 AND RAICRS BETWEEN 46 AND 68 AND DEICRS BETWEEN 14 AND 34",
+            "wcs": WCS(ra0=56.9, dec0=24.1, scale_arcsec=55.0, rotation_deg=-20.0, width=900, height=1100),
+            "expected": set(),
+            "hips": {"17702", "17499", "17573", "17608", "17847"},
+        },
+    )
+    for index, field in enumerate(fields):
+        online = _vizier_hipparcos(field["where"])
+        assert len(online) >= len(field["expected"])
+        stars = [
+            Star(hip, None, ra, dec, mag)
+            for hip, (ra, dec, mag) in online.items()
+        ]
+        photo = tmp_path / f"online-{index}.png"
+        save_gray_png(render_starfield(stars, field["wcs"]), photo)
+        blind = identify_photo(conn, photo)
+        aimed = identify_photo(
+            conn,
+            photo,
+            azimuth_deg=180.0,
+            altitude_deg=30.0,
+            roll_deg=20.0,
+            fov_deg=70.0,
+        )
+        assert blind["ok"] is True, blind.get("error")
+        assert aimed["grade"] == "solved"
+        assert _confident_names(aimed) == _confident_names(blind)
+        named = {
+            row["catalog_id"]: row
+            for row in blind["identifications"]
+            if (row["confidence"] or 0) >= 0.9 and row["catalog_id"] in online
+        }
+        solved = blind["solve"]
+        wcs = WCS(
+            ra0=solved["center_ra_deg"],
+            dec0=solved["center_dec_deg"],
+            scale_arcsec=solved["pixel_scale_arcsec"],
+            rotation_deg=solved["rotation_deg"],
+            width=blind["width"],
+            height=blind["height"],
+        )
+        confirmed = set()
+        for catalog_id, row in named.items():
+            ra, dec = pixel_to_sky(row["pixel_x"], row["pixel_y"], wcs)
+            online_ra, online_dec, _mag = online[catalog_id]
+            assert angular_separation_deg(ra, dec, online_ra, online_dec) < 0.03
+            if row["name"]:
+                confirmed.add(row["name"])
+        assert field["expected"] <= confirmed
+        assert field["hips"] <= set(named)
 
 
 def test_viewer_page_and_file_guard():
@@ -448,6 +583,7 @@ def test_viewer_page_and_file_guard():
         assert "Sky map" in page
         assert "Turn with the phone" in page
         assert "Show the sky behind the names" in page
+        assert "Scan this photo" in page
         assert "Upload a photo" not in page
         assert "north of the equator" in page
         assert "east of Greenwich" in page
