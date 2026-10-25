@@ -633,6 +633,32 @@ def test_screen_center_is_the_aimed_direction():
     assert abs(dec - expected_dec) < 0.05
 
 
+def test_galactic_center_lands_on_the_milky_way():
+    from nightsky.skyview import galactic_lb
+
+    longitude, latitude = galactic_lb(266.4, -28.9)
+    assert min(longitude, 360 - longitude) < 2
+    assert abs(latitude) < 2
+    _longitude, pole = galactic_lb(192.86, 27.13)
+    assert pole > 88
+
+
+def test_vega_note_describes_the_star(db):
+    from nightsky.skyview import sky_chart
+
+    conn, _summary = db
+    when = datetime(2026, 10, 25, 5, 0, tzinfo=timezone.utc)
+    chart = sky_chart(conn, 37.77, -122.42, when)
+    vega = next(row for row in chart["objects"] if row["name"] == "Vega")
+    assert vega["constellation"] == "Lyra"
+    assert vega["distance_label"] == "25 light-years"
+    assert "Summer Triangle" in vega["about"]
+    assert any("12,000" in fact for fact in vega["facts"])
+    moon = next(row for row in chart["objects"] if row["name"] == "Moon")
+    assert "tides" in " ".join(moon["facts"])
+    assert moon["distance_label"]
+
+
 def test_catalog_distance_uses_hipparcos_parallax():
     from nightsky.stars import distance_ly
 
@@ -681,12 +707,10 @@ def test_viewer_page_and_file_guard():
         assert "Show the sky behind the names" in page
         assert "phonePose" in page
         assert "90 - event.beta" not in page
-        assert "Click a name" in page
-        assert "light-years" in page
-        assert "spectral type" in page
+        assert "Click one" in page
+        assert "a few facts" in page
+        assert "stretched photograph" in page
         assert "Scan this photo" in page
-        assert "Mellinger" in page
-        assert "Hubble and JWST" in page
         assert "Upload a photo" not in page
         assert "north of the equator" in page
         assert "east of Greenwich" in page

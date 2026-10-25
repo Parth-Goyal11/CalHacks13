@@ -131,13 +131,25 @@
       font-size: 22px;
       font-weight: 500;
     }
+    #detail-kicker {
+      margin: 0 0 8px;
+      color: var(--amber);
+      font-size: 13px;
+    }
     #detail-summary {
-      margin: 0 0 10px;
-      color: var(--muted);
+      margin: 0 0 8px;
       font-size: 14px;
       line-height: 1.45;
     }
-    #detail dl { grid-template-columns: 8.4rem 1fr; margin: 0; font-size: 14px; }
+    #detail-facts {
+      margin: 0 0 8px;
+      padding-left: 1.1rem;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    #detail-facts li { margin: 0 0 6px; }
+    #detail-where { margin: 0; font-size: 14px; }
     #detail-close {
       position: absolute;
       top: 8px;
@@ -159,7 +171,7 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">The map is the catalog drawn for where you are and what time it is, over a photograph of the real sky. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, hold it up and the sky turns with the compass and the tilt, the way a planetarium does. The camera can replace the photograph so the names sit on the real sky. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
+    <p class="lede">The map is the catalog drawn for where you are and what time it is. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, hold it up and the sky turns with the compass and the tilt, the way a planetarium does. The camera can replace the drawn sky so the names sit on the real one. Scan this photo names the stars in that picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
@@ -171,17 +183,19 @@
       <div id="live">
         <div id="viewport" class="viewport">
           <video id="camera" playsinline autoplay muted></video>
-          <canvas id="skyphoto" aria-label="All-sky photograph of this view"></canvas>
+          <canvas id="skyphoto" aria-label="Drawn sky for this direction"></canvas>
           <canvas id="chart"></canvas>
           <aside id="detail" hidden>
             <button id="detail-close" type="button">Close</button>
             <h2 id="detail-name"></h2>
+            <p id="detail-kicker"></p>
             <p id="detail-summary"></p>
-            <dl id="detail-facts"></dl>
+            <ul id="detail-facts"></ul>
+            <p id="detail-where"></p>
           </aside>
         </div>
         <p id="sky-status" class="note"></p>
-        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. Dots mark named stars, planets, the Moon, and satellites. Click a name for the catalog entry: magnitude, spectral type, distance, and where it is right now. A star with only a Hipparcos number is left off the map. The background is Axel Mellinger’s Milky Way, graded into a deep planetarium field. Hubble and JWST frames cover only a few arcminutes, so they cannot fill this view.</p>
+        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. The sky is drawn, not a stretched photograph: a smooth Milky Way and sharp stars from the catalog. Named dots pulse. Click one for where the star is, how far away it is, and a few facts. A star with only a Hipparcos number stays a point, without a name.</p>
         <div class="aim">
           <label>Heading from true north, degrees clockwise
             <input id="heading" type="range" min="0" max="360" value="0">
@@ -440,8 +454,8 @@
         altitude: pose.altitude,
         roll: pose.roll,
         fov: Number(fovInput.value),
-        width: canvas.width || box.clientWidth,
-        height: canvas.height || box.clientHeight
+        width: box.clientWidth,
+        height: box.clientHeight
       };
     }
 
@@ -587,67 +601,21 @@
       return row.object_type;
     }
 
-    function formatHours(degrees) {
-      const hours = ((degrees % 360) + 360) % 360 / 15;
-      const whole = Math.floor(hours);
-      const minutes = Math.floor((hours - whole) * 60);
-      return `${whole}h ${String(minutes).padStart(2, "0")}m`;
-    }
-
-    function formatDistance(lightYears) {
-      if (lightYears == null) return null;
-      return lightYears < 20 ? `${fmt(lightYears, 1)} light-years` : `${fmt(lightYears, 0)} light-years`;
-    }
-
-    function formatMotion(row) {
-      if (row.pm_ra == null || row.pm_dec == null) return null;
-      return `${fmt(row.pm_ra, 1)}, ${fmt(row.pm_dec, 1)} mas/year`;
-    }
-
-    function detailSummary(row) {
-      if (row.object_type === "star") {
-        const parts = [`Magnitude ${fmt(row.mag, 2)}`];
-        if (row.spectral_type) parts.push(`spectral type ${row.spectral_type}`);
-        const distance = formatDistance(row.distance_ly);
-        if (distance) parts.push(`about ${distance} away`);
-        return `${parts.join(", ")}. These figures are the Hipparcos measurements stored for this star.`;
-      }
-      if (row.object_type === "satellite") {
-        return `${row.name} is a satellite from the CelesTrak elements, NORAD ${row.catalog_id}. It is ${fmt(row.alt_deg, 1)}° up.`;
-      }
-      return `${row.name} is ${fmt(row.alt_deg, 1)}° up and ${fmt(row.az_deg, 1)}° from true north. The place comes from the JPL ephemeris.`;
-    }
-
     function openDetail(row) {
       selectedId = row.catalog_id;
       const panel = document.querySelector("#detail");
       document.querySelector("#detail-name").textContent = row.name;
-      document.querySelector("#detail-summary").textContent = detailSummary(row);
-      const distance = formatDistance(row.distance_ly);
-      const motion = formatMotion(row);
-      const facts = [
-        ["Kind", kindLabel(row)],
-        ["Catalog", row.object_type === "star" ? `Hipparcos ${row.catalog_id}` : row.object_type === "satellite" ? `NORAD ${row.catalog_id}` : "JPL DE421"],
-        ["Magnitude", row.mag == null ? "—" : fmt(row.mag, 2)],
-        ["Spectral type", row.spectral_type || "—"],
-        ["Distance", distance || "—"],
-        ["Parallax", row.parallax_mas == null ? "—" : `${fmt(row.parallax_mas, 2)} mas`],
-        ["Proper motion", motion || "—"],
-        ["Altitude", `${fmt(row.alt_deg, 1)}°`],
-        ["Azimuth", `${fmt(row.az_deg, 1)}° from true north`],
-        ["Right ascension", row.ra_deg == null ? "—" : `${formatHours(row.ra_deg)} (${fmt(row.ra_deg, 2)}°)`],
-        ["Declination", row.dec_deg == null ? "—" : `${fmt(row.dec_deg, 2)}°`]
-      ];
+      const kicker = [row.constellation, row.distance_label].filter(Boolean).join(" · ");
+      document.querySelector("#detail-kicker").textContent = kicker;
+      document.querySelector("#detail-summary").textContent = row.about || `${row.name} is ${fmt(row.alt_deg, 0)}° above the horizon.`;
       const list = document.querySelector("#detail-facts");
       list.replaceChildren();
-      for (const [name, value] of facts) {
-        if (!value || value === "—") continue;
-        const term = document.createElement("dt");
-        term.textContent = name;
-        const detail = document.createElement("dd");
-        detail.textContent = value;
-        list.append(term, detail);
+      for (const fact of row.facts || []) {
+        const item = document.createElement("li");
+        item.textContent = fact;
+        list.append(item);
       }
+      document.querySelector("#detail-where").textContent = `Right now it is ${fmt(row.alt_deg, 0)}° up and ${fmt(row.az_deg, 0)}° around from true north.`;
       panel.hidden = false;
     }
 
@@ -656,14 +624,25 @@
       document.querySelector("#detail").hidden = true;
     }
 
-    function resizeChart() {
+    function pixelRatio() {
+      return Math.min(window.devicePixelRatio || 1, 2);
+    }
+
+    function viewSize() {
       const box = document.querySelector("#viewport");
-      const width = Math.max(2, box.clientWidth);
-      const height = Math.max(2, box.clientHeight);
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
+      return [Math.max(2, box.clientWidth), Math.max(2, box.clientHeight)];
+    }
+
+    function resizeChart() {
+      const [width, height] = viewSize();
+      const ratio = pixelRatio();
+      const pixelsWide = Math.round(width * ratio);
+      const pixelsHigh = Math.round(height * ratio);
+      if (canvas.width !== pixelsWide || canvas.height !== pixelsHigh) {
+        canvas.width = pixelsWide;
+        canvas.height = pixelsHigh;
       }
+      canvas.getContext("2d").setTransform(ratio, 0, 0, ratio, 0, 0);
     }
 
     function drawChart() {
@@ -691,6 +670,7 @@
         pen = true;
       }
       context.stroke();
+      drawField(context, aim);
       drawFigures(context, aim);
       const placed = [];
       const visible = [];
@@ -762,7 +742,7 @@
         const polarisLine = polaris
           ? `Polaris is ${fmt(polaris.alt_deg, 1)}° up and ${fmt(polaris.az_deg, 1)}° from true north.`
           : "Polaris is the north mark.";
-        const loading = skyReady || cameraOn ? "" : " The sky photograph is loading.";
+        const loading = skyReady || cameraOn ? "" : " The sky is still starting.";
         const tracking = followPhone && sensorAim
           ? ` The phone is aimed ${fmt(sensorAim.altitude, 0)}° up, facing ${fmt(sensorAim.azimuth, 0)}°. The sky turns with it.`
           : sensorNote;
@@ -801,13 +781,14 @@
       }
       const place = placeTime();
       if (!place) return;
-      const box = document.querySelector("#viewport");
-      const width = Math.max(2, box.clientWidth);
-      const height = Math.max(2, box.clientHeight);
-      if (skyPhoto.width !== width || skyPhoto.height !== height) {
-        skyPhoto.width = width;
-        skyPhoto.height = height;
-        skyGl.viewport(0, 0, width, height);
+      const [width, height] = viewSize();
+      const ratio = pixelRatio();
+      const pixelsWide = Math.round(width * ratio);
+      const pixelsHigh = Math.round(height * ratio);
+      if (skyPhoto.width !== pixelsWide || skyPhoto.height !== pixelsHigh) {
+        skyPhoto.width = pixelsWide;
+        skyPhoto.height = pixelsHigh;
+        skyGl.viewport(0, 0, pixelsWide, pixelsHigh);
       }
       const [right, up, forward] = basis(aim);
       const gl = skyGl;
@@ -815,8 +796,8 @@
       gl.uniform3fv(skyUniforms.right, right);
       gl.uniform3fv(skyUniforms.up, up);
       gl.uniform3fv(skyUniforms.forward, forward);
-      gl.uniform1f(skyUniforms.focal, (width / 2) / Math.tan(aim.fov * Math.PI / 360));
-      gl.uniform2f(skyUniforms.center, (width - 1) / 2, (height - 1) / 2);
+      gl.uniform1f(skyUniforms.focal, (pixelsWide / 2) / Math.tan(aim.fov * Math.PI / 360));
+      gl.uniform2f(skyUniforms.center, (pixelsWide - 1) / 2, (pixelsHigh - 1) / 2);
       gl.uniform1f(skyUniforms.sidereal, sidereal);
       gl.uniform1f(skyUniforms.sinLat, Math.sin(place.latitude * Math.PI / 180));
       gl.uniform1f(skyUniforms.cosLat, Math.cos(place.latitude * Math.PI / 180));
@@ -836,7 +817,6 @@
       const fragment = gl.createShader(gl.FRAGMENT_SHADER);
       gl.shaderSource(fragment, `
         precision mediump float;
-        uniform sampler2D uSky;
         uniform vec3 uRight, uUp, uForward;
         uniform float uFocal, uSidereal, uSinLat, uCosLat;
         uniform vec2 uCenter;
@@ -850,11 +830,23 @@
           float declination = asin(sinDec);
           float cosine = max(cos(declination), 0.0001);
           float hour = atan(-east / cosine, (uCosLat * zenith - uSinLat * north) / cosine);
-          float ra = mod(uSidereal - degrees(hour), 360.0);
-          vec3 photo = texture2D(uSky, vec2(0.5 - ra / 360.0, 0.5 - degrees(declination) / 180.0)).rgb;
-          float lift = pow(clamp(1.0 - zenith, 0.0, 1.0), 1.7);
-          vec3 horizon = vec3(0.025, 0.04, 0.07) * lift * (1.0 - photo);
-          gl_FragColor = vec4(photo + horizon, 1.0);
+          float ra = radians(mod(uSidereal - degrees(hour), 360.0));
+          float cosDec = cos(declination);
+          vec3 equatorial = vec3(cosDec * cos(ra), cosDec * sin(ra), sin(declination));
+          float gx = dot(equatorial, vec3(-0.0548756, -0.8734371, -0.4838350));
+          float gy = dot(equatorial, vec3(0.4941094, -0.4448296, 0.7469822));
+          float gz = dot(equatorial, vec3(-0.8676661, -0.1980764, 0.4559838));
+          float latitude = asin(clamp(gz, -1.0, 1.0));
+          float longitude = atan(gy, gx);
+          float band = exp(-pow(latitude / 0.22, 2.0));
+          float core = exp(-pow(longitude / 0.85, 2.0));
+          float lanes = 0.8 + 0.2 * sin(longitude * 3.0 + 0.7);
+          float dust = band * lanes * (0.55 + 1.15 * core);
+          vec3 night = mix(vec3(0.004, 0.008, 0.02), vec3(0.045, 0.07, 0.12), pow(clamp(1.0 - zenith, 0.0, 1.0), 1.5));
+          vec3 milk = mix(vec3(0.25, 0.32, 0.55), vec3(0.72, 0.55, 0.28), clamp(core, 0.0, 1.0));
+          vec3 color = night + milk * dust;
+          color *= smoothstep(-0.12, 0.04, zenith);
+          gl_FragColor = vec4(color, 1.0);
         }
       `);
       gl.compileShader(fragment);
@@ -869,12 +861,6 @@
       const corner = gl.getAttribLocation(program, "aCorner");
       gl.enableVertexAttribArray(corner);
       gl.vertexAttribPointer(corner, 2, gl.FLOAT, false, 0, 0);
-      const texture = gl.createTexture();
-      gl.bindTexture(gl.TEXTURE_2D, texture);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       skyGl = gl;
       skyUniforms = {
         program,
@@ -887,15 +873,47 @@
         sinLat: gl.getUniformLocation(program, "uSinLat"),
         cosLat: gl.getUniformLocation(program, "uCosLat")
       };
-      const image = new Image();
-      image.onload = () => {
-        gl.bindTexture(gl.TEXTURE_2D, texture);
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        skyReady = true;
-      };
-      image.src = "/api/panorama";
+      skyReady = true;
+    }
+
+    function fieldColor(row) {
+      const spectral = (row.spectral_type || "").toUpperCase();
+      const letter = spectral.match(/[OBAFGKM]/);
+      if (!letter || row.mag == null || row.mag > 2.6) return "#f6f3ec";
+      return { O: "#b9cdff", B: "#c9d8ff", A: "#f4f7ff", F: "#fff1d0", G: "#ffe0a4", K: "#ffc48a", M: "#ff9b6a" }[letter[0]];
+    }
+
+    function drawField(context, aim) {
+      if (!chart || !chart.objects) return;
+      const buckets = new Map();
+      for (const row of chart.objects) {
+        if (row.object_type !== "star" || row.alt_deg < 0) continue;
+        const point = project(row.alt_deg, row.az_deg, aim);
+        if (!point || point[0] < -4 || point[1] < -4 || point[0] > aim.width + 4 || point[1] > aim.height + 4) continue;
+        const color = fieldColor(row);
+        if (!buckets.has(color)) buckets.set(color, []);
+        const radius = Math.max(0.55, 2.15 - (row.mag ?? 6) * 0.26);
+        buckets.get(color).push([point[0], point[1], radius, row.mag ?? 6]);
+      }
+      for (const [color, spots] of buckets) {
+        context.fillStyle = color;
+        context.globalAlpha = 0.22;
+        context.beginPath();
+        for (const [x, y, radius, mag] of spots) {
+          if (mag > 2.2) continue;
+          context.moveTo(x + radius * 3.2, y);
+          context.arc(x, y, radius * 3.2, 0, Math.PI * 2);
+        }
+        context.fill();
+        context.globalAlpha = 0.95;
+        context.beginPath();
+        for (const [x, y, radius] of spots) {
+          context.moveTo(x + radius, y);
+          context.arc(x, y, radius, 0, Math.PI * 2);
+        }
+        context.fill();
+      }
+      context.globalAlpha = 1;
     }
 
     async function refreshSky() {
@@ -1205,10 +1223,7 @@
     });
     function canvasPoint(event) {
       const rect = canvas.getBoundingClientRect();
-      return [
-        (event.clientX - rect.left) * (canvas.width / Math.max(rect.width, 1)),
-        (event.clientY - rect.top) * (canvas.height / Math.max(rect.height, 1))
-      ];
+      return [event.clientX - rect.left, event.clientY - rect.top];
     }
 
     function hitAt(x, y) {

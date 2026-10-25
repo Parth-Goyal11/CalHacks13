@@ -20,11 +20,12 @@ from nightsky.paths import SKYFIELD
 from nightsky.planets import open_ephemeris
 from nightsky.satellites import satellite_from_elements
 from nightsky.solve import Star
+from nightsky.starfacts import story_for
 from nightsky.stars import distance_ly
 from nightsky.wcs import angular_separation_deg
 
 POLARIS_ID = "11767"
-STAR_MAG_LIMIT = 5.0
+STAR_MAG_LIMIT = 6.0
 # Stick figures use Hipparcos ids. The lines are the familiar naked-eye
 # patterns, not a licensed chart. A star fainter than the map limit is omitted.
 FIGURES = (
@@ -61,6 +62,8 @@ def sky_chart(conn: psycopg.Connection, latitude: float, longitude: float, when:
     moving = _planet_altaz(latitude, longitude, moment) + _satellite_altaz(conn, latitude, longitude, moment)
     objects = [row for row in stars + moving if row["alt_deg"] > -1.0]
     objects.sort(key=lambda row: (row["mag"] is None, row["mag"] if row["mag"] is not None else 99))
+    for row in objects:
+        _attach_story(row)
     polaris = next((row for row in stars if row["catalog_id"] == POLARIS_ID), None)
     return {
         "ok": True,
@@ -73,6 +76,38 @@ def sky_chart(conn: psycopg.Connection, latitude: float, longitude: float, when:
         "objects": objects,
         "figures": list(FIGURES),
     }
+
+
+def galactic_lb(ra_deg: float, dec_deg: float) -> tuple[float, float]:
+    """Galactic longitude and latitude in degrees. The same matrix is in the sky shader."""
+    ra = math.radians(ra_deg)
+    dec = math.radians(dec_deg)
+    cos_dec = math.cos(dec)
+    equatorial = (
+        cos_dec * math.cos(ra),
+        cos_dec * math.sin(ra),
+        math.sin(dec),
+    )
+    matrix = (
+        (-0.0548756, -0.8734371, -0.4838350),
+        (0.4941094, -0.4448296, 0.7469822),
+        (-0.8676661, -0.1980764, 0.4559838),
+    )
+    galactic = [sum(row[i] * equatorial[i] for i in range(3)) for row in matrix]
+    latitude = math.degrees(math.asin(min(1.0, max(-1.0, galactic[2]))))
+    longitude = math.degrees(math.atan2(galactic[1], galactic[0])) % 360.0
+    return longitude, latitude
+
+
+def _attach_story(row: dict) -> None:
+    story = story_for(str(row["catalog_id"]), row["object_type"], row.get("name"))
+    if not story:
+        return
+    row["constellation"] = story.get("constellation")
+    row["about"] = story["about"]
+    row["facts"] = list(story["facts"])
+    if story.get("distance"):
+        row["distance_label"] = story["distance"]
 
 
 def local_sidereal_deg(longitude: float, when: datetime) -> float:
@@ -193,7 +228,11 @@ def _planet_altaz(latitude: float, longitude: float, when: datetime) -> list[dic
             continue
         apparent = site.at(time).observe(planets[key]).apparent()
         alt, az, _distance = apparent.altaz()
-        ra, dec, _separation = apparent.radec()
+        ra, dec, separation = apparent.radec()
+        if object_type == "moon":
+            distance_label = f"{separation.km / 1000:.0f} thousand km away"
+        else:
+            distance_label = f"{separation.au:.2f} astronomical units away"
         found.append(
             {
                 "catalog_id": label.lower(),
@@ -205,6 +244,7 @@ def _planet_altaz(latitude: float, longitude: float, when: datetime) -> list[dic
                 "alt_deg": float(alt.degrees),
                 "az_deg": float(az.degrees) % 360.0,
                 "anchor": False,
+                "distance_label": distance_label,
             }
         )
     return found
