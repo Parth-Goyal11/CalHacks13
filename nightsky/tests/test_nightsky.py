@@ -407,6 +407,8 @@ def test_polaris_altitude_matches_latitude_and_centers_the_lens(db):
     chart = sky_chart(conn, 37.77, -122.42, when)
     polaris = chart["polaris"]
     assert polaris["name"] == "Polaris"
+    assert 30 < polaris["ra_deg"] < 50
+    assert polaris["dec_deg"] > 88
     assert abs(polaris["alt_deg"] - 37.77) < 1.2
     assert min(polaris["az_deg"], 360 - polaris["az_deg"]) < 3
     aim = Aim(polaris["az_deg"], polaris["alt_deg"], 0, 60, 800, 1000)
@@ -630,6 +632,7 @@ def test_viewer_page_and_file_guard():
         assert "Sky map" in page
         assert "Turn with the phone" in page
         assert "Show the sky behind the names" in page
+        assert "Click a name" in page
         assert "Scan this photo" in page
         assert "Mellinger" in page
         assert "Hubble and JWST" in page

@@ -108,6 +108,8 @@ def _star_altaz(conn, latitude: float, longitude: float, when: datetime) -> list
                 "name": name[index] or f"HIP {hip}",
                 "object_type": "star",
                 "mag": mag[index],
+                "ra_deg": float(ra[index]),
+                "dec_deg": float(dec[index]),
                 "alt_deg": float(altitude[index]),
                 "az_deg": float(azimuth[index]),
                 "anchor": hip == POLARIS_ID,
@@ -162,12 +164,15 @@ def _planet_altaz(latitude: float, longitude: float, when: datetime) -> list[dic
             continue
         apparent = site.at(time).observe(planets[key]).apparent()
         alt, az, _distance = apparent.altaz()
+        ra, dec, _separation = apparent.radec()
         found.append(
             {
                 "catalog_id": label.lower(),
                 "name": label,
                 "object_type": object_type,
                 "mag": None,
+                "ra_deg": float(ra.hours * 15.0),
+                "dec_deg": float(dec.degrees),
                 "alt_deg": float(alt.degrees),
                 "az_deg": float(az.degrees) % 360.0,
                 "anchor": False,
@@ -190,6 +195,7 @@ def _satellite_altaz(conn, latitude: float, longitude: float, when: datetime) ->
             satellite = satellite_from_elements(elements, timescale)
             topocentric = (satellite - site).at(moment)
             alt, az, _distance = topocentric.altaz()
+            ra, dec, _separation = topocentric.radec()
         except Exception:
             continue
         if alt.degrees <= -1.0:
@@ -200,6 +206,8 @@ def _satellite_altaz(conn, latitude: float, longitude: float, when: datetime) ->
                 "name": name or str(norad_id),
                 "object_type": "satellite",
                 "mag": None,
+                "ra_deg": float(ra.hours * 15.0),
+                "dec_deg": float(dec.degrees),
                 "alt_deg": float(alt.degrees),
                 "az_deg": float(az.degrees) % 360.0,
                 "anchor": False,

@@ -109,6 +109,35 @@
     #skyphoto { z-index: 0; display: none; }
     #skyphoto.on { display: block; }
     #chart { z-index: 1; }
+    #detail {
+      position: absolute;
+      z-index: 2;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      max-width: 340px;
+      max-height: calc(100% - 24px);
+      overflow: auto;
+      padding: 12px 36px 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(10, 14, 22, 0.92);
+      color: var(--text);
+    }
+    #detail[hidden] { display: none; }
+    #detail h2 {
+      margin: 0 0 8px;
+      font-family: Palatino, "Iowan Old Style", Georgia, serif;
+      font-size: 22px;
+      font-weight: 500;
+    }
+    #detail dl { grid-template-columns: 8.2rem 1fr; margin: 0; font-size: 14px; }
+    #detail-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 10px;
+    }
     .aim { display: grid; gap: 8px; margin-top: 12px; }
     .aim label { font-size: 14px; }
     input[type="range"] { padding: 0; accent-color: var(--amber); }
@@ -138,9 +167,14 @@
           <video id="camera" playsinline autoplay muted></video>
           <canvas id="skyphoto" aria-label="All-sky photograph of this view"></canvas>
           <canvas id="chart"></canvas>
+          <aside id="detail" hidden>
+            <button id="detail-close" type="button">Close</button>
+            <h2 id="detail-name"></h2>
+            <dl id="detail-facts"></dl>
+          </aside>
         </div>
         <p id="sky-status" class="note"></p>
-        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. The photograph is Axel Mellinger’s all-sky mosaic of the Milky Way. Hubble and JWST frames cover only a few arcminutes, so they cannot fill this view.</p>
+        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. Dots mark named stars, planets, the Moon, and satellites. Click a name for its catalog entry. A star with only a Hipparcos number is left off the map. The photograph is Axel Mellinger’s all-sky mosaic of the Milky Way. Hubble and JWST frames cover only a few arcminutes, so they cannot fill this view.</p>
         <div class="aim">
           <label>Heading from true north, degrees clockwise
             <input id="heading" type="range" min="0" max="360" value="0">
@@ -224,6 +258,8 @@
     const skyStatus = document.querySelector("#sky-status");
     let sidereal = null;
     let skyReady = false;
+    let hits = [];
+    let selectedId = null;
     let skyGl = null;
     let skyUniforms = null;
 
@@ -436,9 +472,52 @@
     }
 
     function showText(row) {
-      if (row.anchor || row.object_type !== "star") return true;
-      if (row.name && !row.name.startsWith("HIP ")) return true;
-      return row.mag != null && row.mag <= 2.5;
+      return Boolean(row.name) && !(row.object_type === "star" && row.name.startsWith("HIP "));
+    }
+
+    function markColor(row) {
+      if (row.anchor) return "#e2b15a";
+      if (row.object_type === "satellite") return "#8fd0c6";
+      if (row.object_type === "star") return "#f7f4ee";
+      return "#f0d78c";
+    }
+
+    function kindLabel(row) {
+      if (row.object_type === "star") return "Star";
+      if (row.object_type === "planet") return "Planet";
+      if (row.object_type === "moon") return "Moon";
+      if (row.object_type === "satellite") return "Satellite";
+      return row.object_type;
+    }
+
+    function openDetail(row) {
+      selectedId = row.catalog_id;
+      const panel = document.querySelector("#detail");
+      document.querySelector("#detail-name").textContent = row.name;
+      const facts = [
+        ["Kind", kindLabel(row)],
+        ["Catalog", row.object_type === "star" ? `HIP ${row.catalog_id}` : row.object_type === "satellite" ? `NORAD ${row.catalog_id}` : "—"],
+        ["Magnitude", row.mag == null ? "—" : fmt(row.mag, 2)],
+        ["Altitude", `${fmt(row.alt_deg, 1)}°`],
+        ["Azimuth", `${fmt(row.az_deg, 1)}° from true north`],
+        ["Right ascension", row.ra_deg == null ? "—" : `${fmt(row.ra_deg, 2)}°`],
+        ["Declination", row.dec_deg == null ? "—" : `${fmt(row.dec_deg, 2)}°`]
+      ];
+      const list = document.querySelector("#detail-facts");
+      list.replaceChildren();
+      for (const [name, value] of facts) {
+        const term = document.createElement("dt");
+        term.textContent = name;
+        const detail = document.createElement("dd");
+        detail.textContent = value;
+        list.append(term, detail);
+      }
+      panel.hidden = false;
+    }
+
+    function closeDetail() {
+      selectedId = null;
+      document.querySelector("#detail").hidden = true;
     }
 
     function resizeChart() {
@@ -478,31 +557,56 @@
       context.stroke();
       const placed = [];
       const visible = [];
+      hits = [];
+      const pulse = (performance.now() % 2600) / 2600;
       const rows = (chart && chart.objects ? chart.objects : []).slice().sort((a, b) => {
-        const rank = (row) => row.anchor ? -2 : row.object_type !== "star" ? -1 : (row.mag ?? 99);
+        const rank = (row) => {
+          if (row.anchor) return -3;
+          if (row.object_type === "planet" || row.object_type === "moon") return -1;
+          if (row.object_type === "star") return row.mag ?? 20;
+          return 40;
+        };
         return rank(a) - rank(b);
       });
+      context.font = "13px Avenir Next, Segoe UI, sans-serif";
       for (const row of rows) {
-        if (row.alt_deg < 0) continue;
+        if (!showText(row) || row.alt_deg < 0) continue;
         const point = project(row.alt_deg, row.az_deg, aim);
         if (!point || point[0] < 0 || point[1] < 0 || point[0] >= aim.width || point[1] >= aim.height) continue;
-        visible.push(row);
-        const color = row.anchor ? "#e2b15a" : row.object_type === "satellite" ? "#8fd0c6" : row.object_type === "star" ? "#f7f4ee" : "#f0d78c";
-        context.beginPath();
-        context.strokeStyle = color;
-        context.lineWidth = row.anchor ? 2 : 1;
-        context.arc(point[0], point[1], row.anchor ? 8 : 3, 0, Math.PI * 2);
-        context.stroke();
-        if (!showText(row)) continue;
         if (placed.some(([x, y]) => Math.hypot(x - point[0], y - point[1]) < 22)) continue;
         placed.push(point);
-        context.font = "13px Avenir Next, Segoe UI, sans-serif";
+        visible.push(row);
+        const color = markColor(row);
+        const selected = row.catalog_id === selectedId;
+        for (const offset of [0, 0.5]) {
+          const phase = (pulse + offset) % 1;
+          context.beginPath();
+          context.strokeStyle = color;
+          context.globalAlpha = (1 - phase) * (selected ? 0.75 : 0.55);
+          context.lineWidth = 1.4;
+          context.arc(point[0], point[1], 2.2 + phase * 16, 0, Math.PI * 2);
+          context.stroke();
+        }
+        context.globalAlpha = 1;
+        context.beginPath();
+        context.fillStyle = color;
+        const dot = row.mag == null ? 2.6 : Math.max(1.8, 3.3 - row.mag * 0.3);
+        context.arc(point[0], point[1], selected ? dot + 1.1 : dot, 0, Math.PI * 2);
+        context.fill();
         context.lineWidth = 3;
         context.strokeStyle = "rgba(0, 0, 0, 0.85)";
         context.fillStyle = color;
-        context.strokeText(row.name, point[0] + 8, point[1] - 6);
-        context.fillText(row.name, point[0] + 8, point[1] - 6);
+        const label = row.name;
+        context.strokeText(label, point[0] + 8, point[1] - 6);
+        context.fillText(label, point[0] + 8, point[1] - 6);
+        hits.push({
+          row,
+          x: point[0],
+          y: point[1],
+          width: context.measureText(label).width
+        });
       }
+      context.globalAlpha = 1;
       context.font = "15px Palatino, Georgia, serif";
       for (const [name, azimuth] of [["N", 0], ["E", 90], ["S", 180], ["W", 270]]) {
         const point = project(0, azimuth, aim);
@@ -522,7 +626,7 @@
           ? `Polaris is ${fmt(polaris.alt_deg, 1)}° up and ${fmt(polaris.az_deg, 1)}° from true north.`
           : "Polaris is the north mark.";
         const loading = skyReady || cameraOn ? "" : " The sky photograph is loading.";
-        skyStatus.textContent = `${polarisLine} ${visible.length} catalog objects are inside this lens.${correction}${sensorNote}${loading}`;
+        skyStatus.textContent = `${polarisLine} ${visible.length} named objects are in this lens.${correction}${sensorNote}${loading}`;
       }
       const now = performance.now();
       if (document.querySelector("#tab-sky").classList.contains("active") && now - listedAt > 400) {
@@ -536,8 +640,9 @@
           head.append(cell);
         }
         table.append(head);
-        for (const row of visible.filter(showText).slice(0, 40)) {
+        for (const row of visible.slice(0, 40)) {
           const line = document.createElement("tr");
+          line.dataset.id = row.catalog_id;
           for (const value of [row.name, row.object_type, `${fmt(row.alt_deg, 1)}°`]) {
             const cell = document.createElement("td");
             cell.textContent = value;
@@ -844,6 +949,42 @@
     }).catch(() => {
       catalog.textContent = "The catalog has not loaded yet.";
     });
+    function canvasPoint(event) {
+      const rect = canvas.getBoundingClientRect();
+      return [
+        (event.clientX - rect.left) * (canvas.width / Math.max(rect.width, 1)),
+        (event.clientY - rect.top) * (canvas.height / Math.max(rect.height, 1))
+      ];
+    }
+
+    function hitAt(x, y) {
+      for (let index = hits.length - 1; index >= 0; index -= 1) {
+        const hit = hits[index];
+        const onDot = Math.hypot(x - hit.x, y - hit.y) < 18;
+        const onLabel = x >= hit.x + 4 && x <= hit.x + 12 + hit.width && y >= hit.y - 20 && y <= hit.y + 6;
+        if (onDot || onLabel) return hit;
+      }
+      return null;
+    }
+
+    canvas.addEventListener("mousemove", (event) => {
+      const [x, y] = canvasPoint(event);
+      canvas.style.cursor = hitAt(x, y) ? "pointer" : "default";
+    });
+    canvas.addEventListener("click", (event) => {
+      const [x, y] = canvasPoint(event);
+      const hit = hitAt(x, y);
+      if (hit) openDetail(hit.row);
+      else closeDetail();
+    });
+    matches.addEventListener("click", (event) => {
+      const line = event.target.closest("tr");
+      if (!line || !line.dataset.id || !chart) return;
+      const row = chart.objects.find((item) => item.catalog_id === line.dataset.id);
+      if (row) openDetail(row);
+    });
+    document.querySelector("#detail-close").addEventListener("click", closeDetail);
+
     bootPlace();
     startSkyPhoto();
     requestAnimationFrame(tick);
