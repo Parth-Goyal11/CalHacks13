@@ -123,6 +123,28 @@ def _equatorial_to_altaz(ra_deg: np.ndarray, dec_deg: np.ndarray, latitude: floa
     return altitude, azimuth
 
 
+def _altaz_to_equatorial(altitude_deg: float, azimuth_deg: float, latitude: float, longitude: float, when: datetime):
+    """Inverse of _equatorial_to_altaz for one direction."""
+    timescale = Loader(str(SKYFIELD)).timescale()
+    sidereal = (timescale.from_datetime(when).gast * 15.0 + longitude) % 360.0
+    altitude = math.radians(altitude_deg)
+    azimuth = math.radians(azimuth_deg)
+    phi = math.radians(latitude)
+    sin_dec = math.sin(altitude) * math.sin(phi) + math.cos(altitude) * math.cos(phi) * math.cos(azimuth)
+    sin_dec = min(1.0, max(-1.0, sin_dec))
+    declination = math.asin(sin_dec)
+    cosine = math.cos(declination)
+    if cosine < 1e-8:
+        hour = 0.0
+    else:
+        sine_hour = -math.sin(azimuth) * math.cos(altitude) / cosine
+        cosine_hour = (
+            math.cos(phi) * math.sin(altitude) - math.sin(phi) * math.cos(altitude) * math.cos(azimuth)
+        ) / cosine
+        hour = math.atan2(sine_hour, cosine_hour)
+    return (sidereal - math.degrees(hour)) % 360.0, math.degrees(declination)
+
+
 def _planet_altaz(latitude: float, longitude: float, when: datetime) -> list[dict]:
     loader, planets = open_ephemeris()
     timescale = loader.timescale()

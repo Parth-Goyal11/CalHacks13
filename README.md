@@ -110,4 +110,4 @@ pip install -e ".[dev]"
 python -m nightsky serve
 ```
 
-The viewer listens on port 8741. Drag the heading and lens height to look around. On a phone, Turn with the phone follows the compass, and Show the sky behind the names puts the rear camera under the labels. Copy `nightsky/.env.example` to `nightsky/.env` for the Bright Data token. That file stays untracked.
+The viewer listens on port 8741. The sky map draws the catalog over an all-sky photograph. Drag the heading and lens height to look around. On a phone, Turn with the phone follows the compass, and Show the sky behind the names hides the photograph, shows the rear camera, and leaves the names on top. Copy `nightsky/.env.example` to `nightsky/.env` for the Bright Data token. That file stays untracked.

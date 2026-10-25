@@ -7,9 +7,11 @@ import tempfile
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlparse
 
+from nightsky.backdrop import survey_jpeg
 from nightsky.db import connect
+from nightsky.horizon import Aim
 from nightsky.paths import OUTPUT
 from nightsky.photos import catalog_counts, demo_view, identify_photo, read_exif
 from nightsky.skyview import sky_chart
@@ -34,6 +36,9 @@ class ViewerHandler(BaseHTTPRequestHandler):
             return
         if path == "/api/demo":
             self._send_json(self._demo())
+            return
+        if path == "/api/backdrop":
+            self._backdrop()
             return
         if path.startswith("/files/"):
             self._send_file(unquote(path[len("/files/") :]))
@@ -96,6 +101,41 @@ class ViewerHandler(BaseHTTPRequestHandler):
                     fov_deg=fov,
                 )
         self._send_json(_public(result))
+
+    def _backdrop(self) -> None:
+        query = parse_qs(urlparse(self.path).query)
+        try:
+            latitude = float(_query_one(query, "latitude"))
+            longitude = float(_query_one(query, "longitude"))
+            azimuth = float(_query_one(query, "azimuth"))
+            altitude = float(_query_one(query, "altitude"))
+            roll = float(_query_one(query, "roll") or 0)
+            fov = float(_query_one(query, "fov") or 68)
+            width = int(float(_query_one(query, "width") or 800))
+            height = int(float(_query_one(query, "height") or 1000))
+            taken_at = _optional_time(_query_one(query, "taken_at") or "") or datetime.now(timezone.utc)
+        except (TypeError, ValueError) as exc:
+            self._send_json({"ok": False, "error": "The sky photograph needs a place, a time, and an aim."}, status=400)
+            return
+        if not -90 <= latitude <= 90 or not -180 <= longitude <= 180:
+            self._send_json({"ok": False, "error": "Latitude runs from −90 to 90 and longitude from −180 to 180."}, status=400)
+            return
+        width = max(64, min(900, width))
+        height = max(64, min(900, height))
+        if not 5 <= fov <= 120 or not -90 <= altitude <= 90:
+            self._send_json({"ok": False, "error": "The aim is outside the sky the photograph can show."}, status=400)
+            return
+        try:
+            jpeg = survey_jpeg(
+                latitude,
+                longitude,
+                taken_at,
+                Aim(azimuth % 360.0, altitude, roll, fov, width, height),
+            )
+        except Exception:
+            self._send(502, b"The telescope photograph is unavailable.", "text/plain; charset=utf-8")
+            return
+        self._send(200, jpeg, "image/jpeg")
 
     def _sky(self) -> None:
         length = int(self.headers.get("Content-Length", "0"))
@@ -226,6 +266,11 @@ def _disposition(headers: str, key: str) -> str | None:
         if token in line:
             return line.split(token, 1)[1].split('"', 1)[0]
     return None
+
+
+def _query_one(query: dict, name: str) -> str:
+    values = query.get(name) or []
+    return values[0].strip() if values else ""
 
 
 def _optional_float(raw: str) -> float | None:

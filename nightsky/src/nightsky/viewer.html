@@ -99,13 +99,20 @@
       border-radius: 12px;
       overflow: hidden;
     }
-    .viewport video, .viewport canvas {
+    .viewport video, .viewport canvas, #backdrop {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
     }
     .viewport video { object-fit: cover; background: transparent; }
+    #backdrop {
+      object-fit: fill;
+      border-radius: 0;
+      z-index: 0;
+      display: none;
+    }
+    #backdrop.on { display: block; }
     #chart { z-index: 1; }
     .aim { display: grid; gap: 8px; margin-top: 12px; }
     .aim label { font-size: 14px; }
@@ -122,7 +129,7 @@
   <header>
     <p class="kicker">Local catalog</p>
     <h1>Night sky</h1>
-    <p class="lede">The map is the catalog drawn for where you are and what time it is. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, the compass can turn the map for you. Scan this photo names the stars in the camera picture from the star pattern. A pattern that fits no single sky is left unnamed.</p>
+    <p class="lede">The map is the catalog drawn for where you are and what time it is, over a photograph of the real sky. Drag the sliders to look around. Polaris is true north, and its height above the horizon is your latitude. On a phone, the compass can turn the map, and the camera can replace the photograph while the names stay on top.</p>
     <p id="catalog" class="meta">Loading the catalog…</p>
   </header>
   <main>
@@ -134,10 +141,11 @@
       <div id="live">
         <div id="viewport" class="viewport">
           <video id="camera" playsinline autoplay muted></video>
+          <img id="backdrop" alt="All-sky photograph of this view">
           <canvas id="chart"></canvas>
         </div>
         <p id="sky-status" class="note"></p>
-        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead.</p>
+        <p class="note">Drag the sliders. Heading 0 faces true north. Lens height 0 is the horizon, and 90 is straight overhead. The photograph is Axel Mellinger’s all-sky mosaic of the Milky Way. Hubble and JWST frames cover only a few arcminutes, so they cannot fill this view.</p>
         <div class="aim">
           <label>Heading from true north, degrees clockwise
             <input id="heading" type="range" min="0" max="360" value="0">
@@ -157,9 +165,7 @@
           <button id="follow" type="button">Turn with the phone</button>
           <p class="hint">The map follows the compass and how far you tip the phone. The browser asks to use motion sensors. Tap again to go back to the sliders.</p>
           <button id="open-camera" type="button">Show the sky behind the names</button>
-          <p class="hint">Turns on the rear camera and leaves the names drawn on top of it. The browser asks to use the camera. Tap again to hide it.</p>
-          <button id="scan" class="primary" type="button">Scan this photo</button>
-          <p class="hint">Names the stars in that picture. The heading is not used. The result is the same plate solve as a scan with no aim.</p>
+          <p class="hint">Turns on the rear camera and leaves the names drawn on top of it, so stars through the lens can line up with the marks. The sky photograph returns when the camera is hidden. The browser asks to use the camera. Tap again to hide it.</p>
         </div>
       </div>
       <figure id="still" hidden>
@@ -217,7 +223,12 @@
     const fovInput = document.querySelector("#fov");
     const canvas = document.querySelector("#chart");
     const video = document.querySelector("#camera");
+    const backdrop = document.querySelector("#backdrop");
     const skyStatus = document.querySelector("#sky-status");
+    let backdropToken = 0;
+    let backdropTimer = null;
+    let backdropAim = null;
+    let backdropPending = null;
 
     function setStatus(text, isError) {
       status.textContent = text || "";
@@ -248,7 +259,8 @@
       } else {
         const named = (data.identifications || []).filter((row) => row.object_type === "star" && (row.confidence || 0) >= 0.9).length;
         const resized = data.resized ? " The long edge was reduced to 1400 pixels." : "";
-        setStatus(`${named} individual stars are named.${resized}`);
+        const snapped = data.grade === "matched" ? " The aim narrowed the catalog, and the star pattern confirmed the names." : "";
+        setStatus(`${named} individual stars are named.${resized}${snapped}`);
       }
       const solve = data.solve;
       const rows = [
@@ -362,8 +374,11 @@
     function placeTime() {
       const time = document.querySelector("#taken_at");
       if (!time.value) time.value = utcMinute();
-      const latitude = Number(document.querySelector("#latitude").value);
-      const longitude = Number(document.querySelector("#longitude").value);
+      const latitudeText = document.querySelector("#latitude").value.trim();
+      const longitudeText = document.querySelector("#longitude").value.trim();
+      if (!latitudeText || !longitudeText) return null;
+      const latitude = Number(latitudeText);
+      const longitude = Number(longitudeText);
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
       return { latitude, longitude, taken_at: time.value };
     }
@@ -445,13 +460,14 @@
       const aim = aimNow();
       const context = canvas.getContext("2d");
       context.clearRect(0, 0, canvas.width, canvas.height);
-      if (!cameraOn) {
+      if (!cameraOn && !backdrop.classList.contains("on")) {
         const wash = context.createRadialGradient(canvas.width / 2, canvas.height, 20, canvas.width / 2, canvas.height, canvas.height);
         wash.addColorStop(0, "rgba(18, 32, 58, 0.55)");
         wash.addColorStop(1, "rgba(5, 7, 12, 0)");
         context.fillStyle = wash;
         context.fillRect(0, 0, canvas.width, canvas.height);
       }
+      queueBackdrop(aim);
       context.strokeStyle = "rgba(226, 177, 90, 0.45)";
       context.lineWidth = 1;
       context.beginPath();
@@ -534,6 +550,87 @@
         }
         matches.append(table);
       }
+    }
+
+    function backdropSize(aim) {
+      const cap = 720;
+      const scale = Math.min(1, cap / Math.max(aim.width, aim.height, 1));
+      return {
+        width: Math.max(64, Math.round(aim.width * scale)),
+        height: Math.max(64, Math.round(aim.height * scale))
+      };
+    }
+
+    function backdropMoved(previous, aim, size, place) {
+      if (!previous) return true;
+      const turn = Math.abs((((aim.azimuth - previous.azimuth) + 540) % 360) - 180);
+      return turn > 1.2
+        || Math.abs(aim.altitude - previous.altitude) > 1.2
+        || Math.abs(aim.roll - previous.roll) > 2
+        || Math.abs(aim.fov - previous.fov) > 1.5
+        || size.width !== previous.width
+        || size.height !== previous.height
+        || place.latitude !== previous.latitude
+        || place.longitude !== previous.longitude
+        || place.taken_at !== previous.taken_at;
+    }
+
+    function queueBackdrop(aim) {
+      if (cameraOn) {
+        backdrop.classList.remove("on");
+        return;
+      }
+      if (!document.querySelector("#tab-sky").classList.contains("active")) return;
+      if (aim.width < 64 || aim.height < 64) return;
+      const place = placeTime();
+      if (!place) return;
+      const size = backdropSize(aim);
+      if (!backdropMoved(backdropPending || backdropAim, aim, size, place)) return;
+      const next = {
+        azimuth: aim.azimuth,
+        altitude: aim.altitude,
+        roll: aim.roll,
+        fov: aim.fov,
+        width: size.width,
+        height: size.height,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        taken_at: place.taken_at
+      };
+      backdropPending = next;
+      clearTimeout(backdropTimer);
+      backdropTimer = setTimeout(() => loadBackdrop(next), 450);
+    }
+
+    function loadBackdrop(next) {
+      if (cameraOn || backdropPending !== next) return;
+      const token = ++backdropToken;
+      const params = new URLSearchParams({
+        latitude: String(next.latitude),
+        longitude: String(next.longitude),
+        taken_at: next.taken_at,
+        azimuth: String(next.azimuth),
+        altitude: String(next.altitude),
+        roll: String(next.roll),
+        fov: String(next.fov),
+        width: String(next.width),
+        height: String(next.height)
+      });
+      const image = new Image();
+      image.onload = () => {
+        if (token !== backdropToken || cameraOn) return;
+        backdropAim = next;
+        if (backdropPending === next) backdropPending = null;
+        backdrop.src = image.src;
+        backdrop.classList.add("on");
+      };
+      image.onerror = () => {
+        if (token !== backdropToken) return;
+        backdropAim = next;
+        if (backdropPending === next) backdropPending = null;
+        backdrop.classList.remove("on");
+      };
+      image.src = `/api/backdrop?${params}`;
     }
 
     async function refreshSky() {
@@ -626,8 +723,11 @@
         for (const track of (video.srcObject ? video.srcObject.getTracks() : [])) track.stop();
         video.srcObject = null;
         cameraOn = false;
+        backdropAim = null;
+        backdropPending = null;
         document.querySelector("#open-camera").classList.remove("primary");
         document.querySelector("#open-camera").textContent = "Show the sky behind the names";
+        drawChart();
         return;
       }
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -637,6 +737,7 @@
       try {
         video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
         cameraOn = true;
+        backdrop.classList.remove("on");
         document.querySelector("#open-camera").classList.add("primary");
         document.querySelector("#open-camera").textContent = "Hide the camera";
         video.onloadedmetadata = () => {
@@ -644,42 +745,6 @@
         };
       } catch (error) {
         skyStatus.textContent = "The camera stayed closed. The names are still on the map.";
-      }
-    });
-
-    document.querySelector("#scan").addEventListener("click", async () => {
-      const place = placeTime();
-      if (!place) {
-        skyStatus.textContent = "Add a latitude and longitude before scanning.";
-        return;
-      }
-      if (!cameraOn || !video.videoWidth) {
-        skyStatus.textContent = "Show the sky behind the names, then scan that picture.";
-        return;
-      }
-      const shot = document.createElement("canvas");
-      shot.width = video.videoWidth;
-      shot.height = video.videoHeight;
-      shot.getContext("2d").drawImage(video, 0, 0);
-      const blob = await new Promise((resolve) => shot.toBlob(resolve, "image/jpeg", 0.92));
-      const body = new FormData();
-      body.append("photo", blob, "sky.jpg");
-      body.append("taken_at", place.taken_at);
-      body.append("latitude", String(place.latitude));
-      body.append("longitude", String(place.longitude));
-      const button = document.querySelector("#scan");
-      button.disabled = true;
-      skyStatus.textContent = "Identifying the stars in this photo…";
-      try {
-        const response = await fetch("/api/uploads", { method: "POST", body });
-        const data = await response.json();
-        document.querySelector("#still").hidden = false;
-        document.querySelector("#live").hidden = true;
-        render(data);
-      } catch (error) {
-        skyStatus.textContent = "The photo could not be labeled.";
-      } finally {
-        button.disabled = false;
       }
     });
 
