@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +33,10 @@ from sky_photo.models import (
     Evidence,
     Identity,
     Metrics,
+    PhotoAnnotation,
     SkyPhotoRecord,
 )
-from sky_photo.overlay import save_annotated_jpeg
+from sky_photo.overlay import save_annotated_jpeg, select_labels
 from sky_photo.vision import (
     JudgmentOutcome,
     VisionClient,
@@ -236,6 +238,21 @@ def _maybe_annotate(
     return rel, url
 
 
+def _ui_annotations(ingest: IngestResult, solve: SolveResult | None) -> list[PhotoAnnotation]:
+    """Expose the same verified pixel points used by the JPEG overlay."""
+    if solve is None or not solve.solved:
+        return []
+    height, width = ingest.full_rgb.shape[:2]
+    if not width or not height:
+        return []
+    return [
+        PhotoAnnotation(name=point.name, kind=point.kind, x=point.pixel_x / width, y=point.pixel_y / height)
+        for point in select_labels(solve.annotation_points, named_stars=solve.named_stars, max_labels=16)
+        if math.isfinite(point.pixel_x) and math.isfinite(point.pixel_y)
+        and 0 <= point.pixel_x < width and 0 <= point.pixel_y < height
+    ]
+
+
 def process_sky_photo(
     image_bytes: bytes,
     *,
@@ -392,6 +409,7 @@ def process_sky_photo(
         needs_review=applied.needs_review or applied.rubric is None,
         annotated_path=annotated_path,
         annotated_image_url=annotated_url,
+        annotations=_ui_annotations(ingest, solve) if applied.identity is not None and applied.identity.method == "plate-solved" else [],
     )
     _persist(record)
     return PipelineOutcome(

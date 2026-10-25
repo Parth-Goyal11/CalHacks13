@@ -1,33 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import "./yonder-polish.css";
 
 export const metadata: Metadata = {
-  title: "Your Sky - Tonight",
+  title: "Yonder",
   description:
-    "See your local sky conditions, take a photo, and discover something outside.",
+    "A little of tonight, kept forever. Capture your sky, discover what is in it, and keep your nights in Memories.",
 };
 
-export const viewport: Viewport = { themeColor: "#0b0d12", viewportFit: "cover" };
+export const viewport: Viewport = {
+  themeColor: "#05070d",
+  viewportFit: "cover",
+};
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html
-      lang="en"
-      style={{ colorScheme: "dark", background: "#0b0d12", scrollbarGutter: "stable", scrollPaddingBottom: "100px" }}
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="en" style={{ colorScheme: "dark", background: "#03050a" }}>
+      <body>{children}</body>
     </html>
   );
 }

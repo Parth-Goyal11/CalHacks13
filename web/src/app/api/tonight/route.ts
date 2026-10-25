@@ -1,4 +1,4 @@
-import type { CurrentWeather } from "@/components/your-sky/tonight-data";
+import type { CurrentWeather } from "@/components/yonder/tonight-data";
 
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;

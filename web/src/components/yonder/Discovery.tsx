@@ -1,0 +1,306 @@
+"use client";
+
+/* eslint-disable @next/next/no-img-element -- Original user files and solver JPEGs must retain their geometry. */
+import { useEffect, useRef, useState } from "react";
+import { annotationUrl, identificationLabel } from "./analysis";
+import { IconButton, SkyIcon } from "./SkyIcon";
+import type { CelestialObject, SkyPhoto } from "./sky-data";
+
+export default function Discovery({
+  photo,
+  saved,
+  saving,
+  error,
+  onSave,
+  onClose,
+}: {
+  photo: SkyPhoto;
+  saved: boolean;
+  saving: boolean;
+  error?: string;
+  onSave: () => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<CelestialObject | null>(null);
+  const [showLabels, setShowLabels] = useState(true);
+  const [annotationFailed, setAnnotationFailed] = useState(false);
+  const [imageFailed, setImageFailed] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const detailClose = useRef<HTMLButtonElement>(null);
+  const objectTrigger = useRef<HTMLElement | null>(null);
+  const image = useRef<HTMLImageElement>(null);
+  const [imageFrame, setImageFrame] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+    height: 0,
+  });
+  const result = photo.result;
+  const annotated = annotationUrl(result);
+  const real = Boolean(result);
+
+  useEffect(() => {
+    dialog.current?.showModal();
+    const element = dialog.current;
+    if (!element) return;
+    const observer = new ResizeObserver(updateImageFrame);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (selected) detailClose.current?.focus();
+    else objectTrigger.current?.focus();
+  }, [selected]);
+
+  function selectObject(object: CelestialObject) {
+    objectTrigger.current = document.activeElement as HTMLElement | null;
+    setSelected(object);
+  }
+
+  function updateImageFrame() {
+    const element = image.current;
+    if (!element?.naturalWidth || !element.naturalHeight) return;
+    const scale = Math.min(
+      element.clientWidth / element.naturalWidth,
+      element.clientHeight / element.naturalHeight,
+    );
+    const width = element.naturalWidth * scale;
+    const height = element.naturalHeight * scale;
+    setImageFrame({
+      left: (element.clientWidth - width) / 2,
+      top: (element.clientHeight - height) / 2,
+      width,
+      height,
+    });
+  }
+
+  return (
+    <dialog
+      ref={dialog}
+      className={`discovery overlay-dialog ${real ? "real-discovery" : ""}`}
+      aria-label={`Discover ${photo.title}`}
+      onCancel={(event) => {
+        event.preventDefault();
+        if (selected) setSelected(null);
+        else onClose();
+      }}
+    >
+      {!imageFailed ? (
+        <img
+          ref={image}
+          className="discovery-photo"
+          src={
+            showLabels && annotated && !annotationFailed
+              ? annotated
+              : photo.image
+          }
+          alt={
+            showLabels && annotated && !annotationFailed
+              ? "Your photo with plate-solved star labels"
+              : `${photo.title} night sky`
+          }
+          onError={() => {
+            if (showLabels && annotated && !annotationFailed)
+              setAnnotationFailed(true);
+            else setImageFailed(true);
+          }}
+          onLoad={updateImageFrame}
+        />
+      ) : (
+        <div className="image-failure">
+          Your photo cannot be previewed in this browser. Its analysis is
+          available below.
+        </div>
+      )}
+      <div className="discovery-vignette" />
+      <div className="discovery-top">
+        <IconButton label="Close discovery" icon="close" onClick={onClose} />
+        <div>
+          <p>{real ? "Your sky" : "Sample sky"}</p>
+          <span>
+            {real ? identificationLabel(result) : "Illustrative markers"}
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`icon-button ${saved ? "is-active" : ""}`}
+          aria-label={
+            saved ? "Remove photo from Memories" : "Save photo to Memories"
+          }
+          aria-pressed={saved}
+          disabled={saving}
+          onClick={onSave}
+        >
+          <SkyIcon name="bookmark" />
+        </button>
+      </div>
+      <div className="photo-caption">
+        <strong>{photo.title}</strong>
+        <span>{photo.date}</span>
+      </div>
+      {annotated && !annotationFailed && (
+        <button
+          type="button"
+          className="annotation-toggle"
+          aria-pressed={showLabels}
+          onClick={() => setShowLabels((value) => !value)}
+        >
+          {showLabels ? "Original photo" : "Show star labels"}
+        </button>
+      )}
+
+      {!imageFailed && (
+        <div
+          className="verified-marker-plane"
+          style={real ? imageFrame : { inset: 0 }}
+        >
+          {photo.objects
+            .filter(
+              (object) =>
+                typeof object.x === "number" && typeof object.y === "number",
+            )
+            .map((object) => (
+              <button
+                type="button"
+                key={object.id}
+                aria-label={`Learn about ${object.name}`}
+                aria-pressed={selected?.id === object.id}
+                className={`sky-marker ${object.tone ?? ""} ${selected?.id === object.id ? "selected" : ""}`}
+                style={{ left: `${object.x}%`, top: `${object.y}%` }}
+                onClick={() => selectObject(object)}
+              >
+                <span className="marker-ring" />
+                <span className="marker-dot" />
+                <span className="marker-label">{object.name}</span>
+              </button>
+            ))}
+        </div>
+      )}
+
+      {real && (
+        <section className="analysis-summary" aria-label="Photo analysis">
+          {error && (
+            <p role="alert" className="review-note">
+              {error}
+            </p>
+          )}
+          {result?.needs_review && (
+            <p className="review-note">
+              {result.identity?.method === "plate-solved"
+                ? "Star positions are solved. The vision review is unavailable."
+                : "Identification needs review. Model suggestions are not confirmed detections."}
+            </p>
+          )}
+          {photo.objects.length ? (
+            <>
+              <p className="result-label">
+                {result?.identity?.method === "plate-solved"
+                  ? "Identified in your photo"
+                  : "Suggested in your photo"}
+              </p>
+              <div className="detection-list">
+                {photo.objects.map((object) => (
+                  <button
+                    type="button"
+                    key={object.id}
+                    onClick={() => selectObject(object)}
+                  >
+                    <SkyIcon name="spark" size={16} />
+                    <span>{object.name}</span>
+                    <SkyIcon name="arrow" size={16} />
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="no-detections">
+              <h2>No named objects confirmed</h2>
+              <p>
+                Your photo is kept as captured. Try a darker sky or a longer
+                exposure for more detail.
+              </p>
+            </div>
+          )}
+          <details className="analysis-details">
+            <summary>Photo details</summary>
+            <dl>
+              {typeof result?.metrics?.star_count === "number" && (
+                <div>
+                  <dt>Star-like points</dt>
+                  <dd>{result.metrics.star_count}</dd>
+                </div>
+              )}
+              {typeof result?.identity?.confidence === "number" && (
+                <div>
+                  <dt>Identification confidence</dt>
+                  <dd>{Math.round(result.identity.confidence * 100)}%</dd>
+                </div>
+              )}
+              {typeof (result?.final_score ?? result?.score) === "number" && (
+                <div>
+                  <dt>Photo score</dt>
+                  <dd>{result?.final_score ?? result?.score}</dd>
+                </div>
+              )}
+              {result?.rarity && (
+                <div>
+                  <dt>Rarity</dt>
+                  <dd>{result.rarity}</dd>
+                </div>
+              )}
+            </dl>
+            {result?.critique?.strengths?.map((text, index) => (
+              <p key={`strength-${index}`}>{text}</p>
+            ))}
+            {result?.critique?.improvements?.map((text, index) => (
+              <p key={`improvement-${index}`}>{text}</p>
+            ))}
+          </details>
+          <p className="local-note">
+            {saved
+              ? "Saved on this device"
+              : "Save to keep this photo on this device"}
+          </p>
+        </section>
+      )}
+
+      {selected && (
+        <section
+          className="object-sheet is-open"
+          aria-label={`${selected.name} details`}
+        >
+          <span className="sheet-handle" />
+          <div className="sheet-heading">
+            <div>
+              <p>{selected.kind}</p>
+              <h2>{selected.name}</h2>
+            </div>
+            <button
+              ref={detailClose}
+              type="button"
+              className="icon-button"
+              aria-label="Close object details"
+              onClick={() => setSelected(null)}
+            >
+              <SkyIcon name="close" />
+            </button>
+          </div>
+          <p className="object-detail">{selected.detail}</p>
+          <div className="sheet-footer">
+            <span>
+              <SkyIcon name="spark" size={17} />
+              {real ? "In your analysis" : "Sample discovery"}
+            </span>
+            <button type="button" disabled={saving} onClick={onSave}>
+              {saving
+                ? "Saving…"
+                : saved
+                  ? "Remove from Memories"
+                  : "Save discovery"}
+            </button>
+          </div>
+        </section>
+      )}
+    </dialog>
+  );
+}

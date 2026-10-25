@@ -13,6 +13,7 @@ type Critique = {
 };
 
 export type SkyPhotoResult = {
+  annotations?: { name: string; kind: string; x: number; y: number }[];
   photo_id?: string;
   is_night_sky?: boolean;
   needs_review?: boolean;

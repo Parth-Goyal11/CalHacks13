@@ -280,6 +280,39 @@
       "title": "Metrics",
       "type": "object"
     },
+    "PhotoAnnotation": {
+      "description": "Solver point normalized to the EXIF-oriented image, not a model guess.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "x": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "X",
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Y",
+          "type": "number"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "x",
+        "y"
+      ],
+      "title": "PhotoAnnotation",
+      "type": "object"
+    },
     "Rubric": {
       "properties": {
         "clarity": {
@@ -490,6 +523,13 @@
       ],
       "default": null,
       "title": "Annotated Image Url"
+    },
+    "annotations": {
+      "items": {
+        "$ref": "#/$defs/PhotoAnnotation"
+      },
+      "title": "Annotations",
+      "type": "array"
     }
   },
   "required": [

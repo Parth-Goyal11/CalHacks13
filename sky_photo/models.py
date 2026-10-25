@@ -76,6 +76,15 @@ class Evidence(BaseModel):
     matches_logged_pass: bool = False
 
 
+class PhotoAnnotation(BaseModel):
+    """Solver point normalized to the EXIF-oriented image, not a model guess."""
+
+    name: str
+    kind: str
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
 class SkyPhotoRecord(BaseModel):
     """Full Sky Photo result record written to data/photos/<photo_id>.json."""
 
@@ -97,3 +106,4 @@ class SkyPhotoRecord(BaseModel):
     # Annotated overlay (plate-solved only; omitted / null on model-estimate).
     annotated_path: str | None = None
     annotated_image_url: str | None = None
+    annotations: list[PhotoAnnotation] = Field(default_factory=list)

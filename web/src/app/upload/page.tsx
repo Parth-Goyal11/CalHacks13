@@ -1,5 +1,5 @@
-import CaptureExperience from "@/components/your-sky/CaptureExperience";
+import YonderApp from "@/components/yonder/YonderApp";
 
 export default function UploadPage() {
-  return <CaptureExperience />;
+  return <YonderApp initialCapture />;
 }

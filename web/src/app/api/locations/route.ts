@@ -1,4 +1,4 @@
-import type { Place } from "@/components/your-sky/tonight-data";
+import type { Place } from "@/components/yonder/tonight-data";
 
 type GeocodingResult = { id?: unknown; name?: unknown; admin1?: unknown; country?: unknown; latitude?: unknown; longitude?: unknown; timezone?: unknown };
 

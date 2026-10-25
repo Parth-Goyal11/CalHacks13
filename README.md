@@ -1,6 +1,8 @@
-# CalHacks 13 — SkyScore
+# CalHacks 13 - Yonder
 
-Real-time multiplayer game where players photograph real space events (ISS passes, launches, meteor showers) to earn points.
+Phone-first astronomy app for capturing a night sky, analyzing the photo, and keeping discoveries in Memories. The current UI follows the Yonder Figma Make design; friends' posts are labeled samples until the shared backend is connected.
+
+See [Yonder setup and remaining app work](docs/yonder-integration.md) for the combined UI/API flow, provider configuration, phone testing and deployment requirements.
 
 Sky Photo (plate-solve → measure → **xAI Grok** judge → coded score) lives in this monorepo on `main`.
 
@@ -8,7 +10,7 @@ Sky Photo (plate-solve → measure → **xAI Grok** judge → coded score) lives
 
 | Path | Role |
 |------|------|
-| `web/` | Next.js + Tailwind — player UI, `/upload` (“Add a photo”), proxies `/api/sky-photo` |
+| `web/` | Next.js + Tailwind: Yonder Home, Explore, camera, Memories, Profile; proxies `/api/sky-photo` |
 | `sky_photo/` | FastAPI service: ingest → OpenCV metrics → Astrometry.net → Grok vision → `score.py` → annotated overlay |
 | `ingest/` | Pull space-event data → Elasticsearch |
 | `spacetime/` | SpacetimeDB real-time backend (placeholder) |
@@ -51,7 +53,7 @@ pip install -e .
 ```bash
 # Terminal A — Sky Photo API
 npm run sky-photo
-# or: uvicorn sky_photo.main:app --reload --host 127.0.0.1 --port 8000
+# or: .venv\Scripts\python.exe -m uvicorn sky_photo.main:app --reload --env-file .env --host 127.0.0.1 --port 8000
 ```
 
 ```bash
@@ -60,10 +62,13 @@ npm run dev
 ```
 
 - App: http://localhost:3000  
-- Add a photo: http://localhost:3000/upload — identity badge (Plate-solved / Model estimate / Needs review), 6-bar rubric, critique, rarity frame, annotated image when solved  
+- Camera: http://localhost:3000/upload - capture/gallery, review, loading, real analysis and saved Memories
+- Loading design preview: http://localhost:3000/loading
 - FastAPI health: http://127.0.0.1:8000/health  
 - `POST /api/sky-photo` (multipart: `image`, optional `claimed_target`)  
 - `GET /api/sky-photo/{photo_id}/annotated`
+
+Successful plate-solved results can also include `annotations` with normalized solver positions for the interactive photo markers. Model estimates never receive invented marker positions. Memories currently persist on the current device/browser origin; accounts, real friends and cloud storage are separate work.
 
 Vision is **xAI Grok only** (no Anthropic). The model returns rubric + critique; score, rarity, and points are computed only in `sky_photo/score.py`.
 
